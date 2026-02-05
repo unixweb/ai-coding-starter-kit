@@ -36,3 +36,69 @@ Kleine Teams (2-10 Personen), Startup-Teams
 - Performance: Logout < 1s
 - Security: Session wird serverseitig vollständig invalidiert
 - UX: Kein Bestätigungs-Dialog nötig (1-Click Logout)
+
+## Tech-Design (Solution Architect)
+
+### Component-Struktur
+```
+Header/Navigation (auf allen geschützten Seiten)
+├── Logo (Link zum Dashboard)
+├── Navigation-Links
+└── User-Bereich (rechts)
+    ├── User-Name angezeigt
+    └── "Abmelden"-Button (Logout)
+
+Logout-Ablauf:
+1. User klickt "Abmelden"
+2. Session wird bei Supabase beendet
+3. Lokale Tokens/Cookies werden gelöscht
+4. Redirect zur Login-Seite
+```
+
+### Daten-Model
+```
+Für Logout werden verwendet:
+- Session-Token → wird bei Supabase invalidiert
+- Lokaler Speicher → wird gelöscht (Cookies + localStorage)
+
+Keine Tabellen-Änderungen nötig!
+```
+
+### Tech-Entscheidungen
+```
+Warum Logout-Button im Header statt in einem Dropdown?
+→ Direkter Zugang, immer sichtbar. Einfacher für MVP.
+  Kann später in ein User-Dropdown-Menü verschoben werden.
+
+Warum serverseitiges Session-Invalidieren?
+→ Nur lokale Tokens löschen reicht nicht. Der Server muss die
+  Session als ungültig markieren, damit andere Tabs und Geräte
+  ebenfalls ausgeloggt werden.
+
+Warum kein Bestätigungs-Dialog?
+→ Logout ist eine risikoarme Aktion. 1-Click ist schneller
+  und weniger nervig für den User.
+
+Warum lokale Session auch bei Netzwerkfehler löschen?
+→ User erwartet nach Klick auf "Abmelden" ausgeloggt zu sein.
+  Auch wenn der Server nicht erreichbar ist, wird der User
+  lokal ausgeloggt und zum Login weitergeleitet.
+```
+
+### Seitenstruktur
+```
+Keine neuen Seiten nötig!
+
+Neue/erweiterte Komponenten:
+- Header-Komponente → Enthält Navigation + User-Bereich + Logout-Button
+  (wird auf allen geschützten Seiten angezeigt, z.B. Dashboard aus PROJ-2)
+
+Wiederverwendete shadcn/ui Komponenten:
+- Button, Separator
+```
+
+### Dependencies
+```
+Keine neuen Packages nötig!
+Supabase Auth hat eine eingebaute signOut()-Funktion.
+```

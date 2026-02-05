@@ -41,3 +41,86 @@ Kleine Teams (2-10 Personen), Startup-Teams
 - Performance: Login < 1s Response Time
 - Security: Rate Limiting (5 Versuche/Minute), generische Fehlermeldungen, Session-Token sicher speichern
 - Accessibility: Formular ist keyboard-navigierbar, Screen-Reader kompatibel
+
+## Tech-Design (Solution Architect)
+
+### Component-Struktur
+```
+/login (Login-Seite)
+├── App Header (Logo + Link zur Registrierung)
+├── Login-Card (zentriert)
+│   ├── Titel: "Willkommen zurück"
+│   ├── Login-Formular
+│   │   ├── Email-Feld (Eingabe)
+│   │   ├── Passwort-Feld (Eingabe mit Sichtbarkeits-Toggle)
+│   │   ├── "Passwort vergessen?"-Link → /reset-password
+│   │   ├── Fehlermeldung (generisch, bei falschen Credentials)
+│   │   └── "Einloggen"-Button (mit Lade-Spinner)
+│   └── Footer-Link: "Noch kein Account? Hier registrieren" → /register
+└── Toast-Benachrichtigungen (Fehler)
+
+/dashboard (Geschützte Seite)
+├── Header mit Navigation
+│   ├── Logo
+│   ├── Navigation-Links
+│   └── User-Bereich (Name + Logout-Button)
+└── Dashboard-Inhalt (Platzhalter für zukünftige Features)
+```
+
+### Daten-Model
+```
+Für Login werden verwendet:
+- Email + Passwort → Supabase Auth prüft Credentials
+- Session-Token → automatisch von Supabase verwaltet
+- Session bleibt im Browser gespeichert (Supabase nutzt localStorage)
+
+Keine neuen Tabellen nötig!
+Supabase Auth managt Sessions automatisch.
+```
+
+### Tech-Entscheidungen
+```
+Warum Supabase Auth für Session-Management?
+→ Sessions werden automatisch im Browser gespeichert und bei jedem
+  Request mitgesendet. Kein manueller Token-Refresh nötig.
+
+Warum Next.js Middleware für geschützte Seiten?
+→ Middleware prüft bei jedem Seitenaufruf, ob ein gültiger
+  Session-Token existiert. Nicht-eingeloggte User werden automatisch
+  zum Login weitergeleitet. Zentral an einer Stelle konfiguriert.
+
+Warum generische Fehlermeldung bei Login?
+→ Sicherheit: "Email oder Passwort falsch" verrät nicht, ob die
+  Email existiert. Schützt vor Account-Enumeration-Angriffen.
+
+Warum Rate Limiting über Supabase?
+→ Supabase hat eingebautes Rate Limiting für Auth-Endpoints.
+  Kein eigener Code nötig.
+```
+
+### Seitenstruktur
+```
+Neue Seiten:
+- /login → Login-Formular
+- /dashboard → Geschützte Hauptseite (Platzhalter)
+
+Neue Komponenten:
+- AuthProvider → Stellt Auth-Status für die ganze App bereit
+- ProtectedRoute → Leitet nicht-eingeloggte User zum Login um
+
+Neue Infrastruktur:
+- Middleware → Prüft Auth-Status bei geschützten Routen
+- Supabase Client (aktiviert) → Browser + Server Client
+
+Wiederverwendete shadcn/ui Komponenten:
+- Card, Input, Button, Form, Label, Toast
+```
+
+### Dependencies
+```
+Keine neuen Packages nötig!
+Alles bereits vorhanden:
+- @supabase/supabase-js (Auth + Session)
+- react-hook-form + zod (Formulare + Validierung)
+- shadcn/ui Komponenten (UI)
+```

@@ -41,3 +41,76 @@ Kleine Teams (2-10 Personen), Startup-Teams
 - Performance: Email-Versand < 5s nach Registrierung
 - Security: Verifizierungs-Token kryptographisch sicher, zeitlich begrenzt (24h), Einmalverwendung
 - Security: Rate Limiting für erneuten Email-Versand (3 pro Stunde)
+
+## Tech-Design (Solution Architect)
+
+### Component-Struktur
+```
+/verify-email (Blocking-Seite für nicht-verifizierte User)
+├── App Header (Logo)
+├── Verifizierungs-Card (zentriert)
+│   ├── Email-Icon (visuelles Feedback)
+│   ├── Titel: "Bitte bestätige deine Email-Adresse"
+│   ├── Beschreibung: "Wir haben eine Email an [user@email.com] gesendet"
+│   ├── "Neue Verifizierungs-Email senden"-Button (mit Lade-Spinner)
+│   ├── Erfolgsmeldung nach erneutem Senden: "Email wurde erneut gesendet"
+│   └── Hinweis: "Spam-Ordner prüfen" + "Falsche Email? Neu registrieren"
+└── Toast-Benachrichtigungen
+
+/auth/callback (Verarbeitet Email-Link)
+→ Prüft Token aus der Verifizierungs-Email
+→ Bei Erfolg: Redirect zum Dashboard
+→ Bei Fehler: Fehlermeldung + "Neue Email senden"-Option
+```
+
+### Daten-Model
+```
+Für Email-Verifizierung werden verwendet:
+- Verifizierungs-Status → Supabase Auth speichert ob Email bestätigt ist
+- Verifizierungs-Token → automatisch von Supabase generiert
+- Token-Ablauf → 24 Stunden (Supabase-Konfiguration)
+
+Keine eigenen Tabellen nötig!
+Supabase Auth managt den gesamten Verifizierungs-Flow.
+```
+
+### Tech-Entscheidungen
+```
+Warum Supabase Auth für Email-Verifizierung?
+→ Supabase sendet automatisch Verifizierungs-Emails bei der Registrierung.
+  Token-Generierung, Email-Versand und Status-Tracking sind eingebaut.
+
+Warum eine eigene Blocking-Seite statt nur eine Meldung?
+→ Klare UX: User versteht sofort, dass er seine Email bestätigen muss.
+  Die Seite bietet direkt die Möglichkeit, eine neue Email anzufordern.
+
+Warum Verifizierungs-Check in der Middleware?
+→ Die bestehende Middleware (aus PROJ-2) wird erweitert:
+  1. Nicht eingeloggt → Redirect zum Login
+  2. Eingeloggt aber nicht verifiziert → Redirect zu /verify-email
+  3. Eingeloggt + verifiziert → Zugang erlaubt
+
+Warum /auth/callback wiederverwenden?
+→ Gleiche Callback-Route wie bei Passwort-Reset (PROJ-3).
+  Supabase sendet verschiedene Token-Typen, die Route unterscheidet
+  automatisch zwischen Verifizierung und Passwort-Reset.
+```
+
+### Seitenstruktur
+```
+Neue Seiten:
+- /verify-email → Blocking-Seite für nicht-verifizierte User
+
+Erweiterte Infrastruktur:
+- Middleware → Zusätzlicher Check: Email verifiziert?
+- /auth/callback → Verarbeitet auch Verifizierungs-Tokens (neben Reset-Tokens)
+
+Wiederverwendete shadcn/ui Komponenten:
+- Card, Button, Toast
+```
+
+### Dependencies
+```
+Keine neuen Packages nötig!
+Supabase Auth managt Email-Versand + Verifizierung.
+```
