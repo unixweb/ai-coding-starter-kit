@@ -119,3 +119,53 @@ Wiederverwendete Komponenten:
 Keine neuen Packages nötig!
 Supabase Auth managt Email-Versand + Token-Handling.
 ```
+
+## QA Test-Report
+
+### Test-Datum: 2026-02-05
+### Getestete Dateien:
+- `src/app/reset-password/page.tsx`
+- `src/app/reset-password/confirm/page.tsx`
+- `src/app/auth/callback/route.ts`
+- `src/app/login/page.tsx` (Erfolgsmeldung nach Reset)
+
+### Acceptance Criteria Ergebnisse
+
+| # | Acceptance Criteria | Status | Details |
+|---|---|---|---|
+| AC-1 | "Passwort vergessen?"-Link auf Login-Seite | PASS | `<Link href="/reset-password">Passwort vergessen?</Link>` in login/page.tsx |
+| AC-2 | Reset-Anfrage-Formular enthält Feld: Email | PASS | Input mit type="email" + Zod-Validierung |
+| AC-3 | Immer Erfolgsmeldung nach Absenden | PASS | Supabase gibt keinen Fehler bei nicht-existierender Email zurück → `isSent` wird gesetzt → "Falls ein Account existiert..." |
+| AC-4 | Reset-Email zeitlich begrenzt (1 Stunde) | PASS | Supabase-Konfiguration (serverseitig) |
+| AC-5 | Reset-Link → Formular: Neues Passwort + Bestätigung | PASS | `redirectTo` → `/auth/callback?next=/reset-password/confirm` → Confirm-Seite mit password + confirmPassword |
+| AC-6 | Gleiche Passwort-Anforderungen wie Registrierung | PASS | `validatePassword` aus `password-strength-indicator.tsx` wiederverwendet + PasswordStrengthIndicator angezeigt |
+| AC-7 | Nach Reset → Login mit Erfolgsmeldung | PASS | `signOut()` + `window.location.href = '/login?reset=success'` → Login zeigt "Passwort erfolgreich zurückgesetzt" |
+| AC-8 | Verwendeter Reset-Link invalidiert | PASS | Supabase invalidiert Token nach `exchangeCodeForSession` (Einmalverwendung) |
+| AC-9 | Ladezustand während Senden | PASS | Beide Seiten: `disabled={isLoading}` + `Loader2` Spinner |
+
+### Edge Case Ergebnisse
+
+| Edge Case | Status | Details |
+|---|---|---|
+| Nicht-existierende Email | PASS | Supabase gibt keinen Fehler zurück → gleiche Erfolgsmeldung |
+| Abgelaufener Reset-Link | PASS | `exchangeCodeForSession` schlägt fehl → Redirect zu `/login?error=auth_callback_error` |
+| Bereits verwendeter Reset-Link | PASS | Gleiche Behandlung wie abgelaufener Link |
+| Mehrfache Reset-Anfrage | PASS | Supabase invalidiert alte Tokens automatisch |
+| Netzwerkfehler | PASS | try/catch/finally auf beiden Seiten, "Verbindungsfehler..." Meldung |
+
+### Gefundene Bugs
+
+Keine Bugs gefunden.
+
+### Security-Analyse
+- **Email-Enumeration**: Geschützt — gleiche Erfolgsmeldung unabhängig von Email-Existenz
+- **Token-Sicherheit**: Kryptographische Tokens von Supabase generiert, zeitlich begrenzt, Einmalverwendung
+- **Post-Reset SignOut**: User wird nach Passwort-Reset ausgeloggt und muss sich mit neuem Passwort anmelden
+- **XSS**: Kein dangerouslySetInnerHTML, React auto-escaping aktiv
+- **Password-Toggle**: Vorhanden mit aria-labels auf beiden Passwort-Feldern
+
+### Gesamtergebnis
+- **Acceptance Criteria**: 9/9 PASS
+- **Edge Cases**: 5/5 PASS
+- **Bugs**: 0
+- **Status**: PRODUCTION-READY

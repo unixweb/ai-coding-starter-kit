@@ -102,3 +102,47 @@ Wiederverwendete shadcn/ui Komponenten:
 Keine neuen Packages nötig!
 Supabase Auth hat eine eingebaute signOut()-Funktion.
 ```
+
+## QA Test-Report
+
+### Test-Datum: 2026-02-05
+### Getestete Dateien:
+- `src/components/app-header.tsx`
+- `src/app/dashboard/page.tsx`
+- `src/lib/supabase-middleware.ts`
+
+### Acceptance Criteria Ergebnisse
+
+| # | Acceptance Criteria | Status | Details |
+|---|---|---|---|
+| AC-1 | Logout-Button im Header sichtbar | PASS | `<Button variant="ghost">... Abmelden</Button>` mit `LogOut`-Icon in AppHeader |
+| AC-2 | Klick beendet Session serverseitig | PASS | `supabase.auth.signOut()` ruft Supabase-Server auf zur Session-Invalidierung |
+| AC-3 | Redirect zur Login-Seite nach Logout | PASS | `window.location.href = '/login'` — wird auch bei Fehler ausgeführt |
+| AC-4 | Geschützte Seiten nicht mehr zugänglich | PASS | Middleware: `!user` → Redirect zu `/login` + Dashboard Server-Side Check |
+| AC-5 | Session-Token/Cookies gelöscht | PASS | `signOut()` löscht Cookies + localStorage, Hard-Navigation erzwingt Neuladen |
+| AC-6 | Logout-Button nur für eingeloggte User sichtbar | PASS | AppHeader wird nur auf geschützten Seiten (Dashboard) gerendert, unauth Users werden vorher redirected |
+| AC-7 | Browser-Zurück-Button zeigt keine geschützten Inhalte | PASS | Hard-Navigation (`window.location.href`) statt Client-Side Router; Dashboard ist Server Component mit Auth-Check |
+
+### Edge Case Ergebnisse
+
+| Edge Case | Status | Details |
+|---|---|---|
+| Netzwerkfehler während Logout | PASS | try/catch fängt Fehler ab (empty catch = intentional), Redirect erfolgt trotzdem |
+| Mehrere Tabs eingeloggt | PASS | `signOut()` invalidiert Session serverseitig → andere Tabs verlieren Auth beim nächsten Request |
+| Session bereits abgelaufen + Logout | PASS | `signOut()` kann fehlschlagen (gefangen), Redirect zu `/login` erfolgt trotzdem |
+
+### Gefundene Bugs
+
+Keine Bugs gefunden.
+
+### Security-Analyse
+- **Serverseitige Invalidierung**: `signOut()` revoked Session bei Supabase — nicht nur lokal
+- **Error-Resilient**: Logout funktioniert auch bei Netzwerkfehler (lokale Bereinigung + Redirect)
+- **Hard-Navigation**: Verhindert Client-Side-Cache-Probleme nach Logout
+- **1-Click Logout**: Kein Bestätigungs-Dialog (wie spezifiziert), schnelle UX
+
+### Gesamtergebnis
+- **Acceptance Criteria**: 7/7 PASS
+- **Edge Cases**: 3/3 PASS
+- **Bugs**: 0
+- **Status**: PRODUCTION-READY

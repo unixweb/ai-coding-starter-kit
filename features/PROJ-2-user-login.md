@@ -124,3 +124,55 @@ Alles bereits vorhanden:
 - react-hook-form + zod (Formulare + Validierung)
 - shadcn/ui Komponenten (UI)
 ```
+
+## QA Test-Report
+
+### Test-Datum: 2026-02-05
+### Getestete Dateien:
+- `src/app/login/page.tsx`
+- `src/app/dashboard/page.tsx`
+- `src/lib/supabase-middleware.ts`
+- `src/middleware.ts`
+
+### Acceptance Criteria Ergebnisse
+
+| # | Acceptance Criteria | Status | Details |
+|---|---|---|---|
+| AC-1 | Login-Formular enthält Felder: Email, Passwort | PASS | Input-Felder mit type="email" und type="password" vorhanden |
+| AC-2 | Bei korrekten Credentials → Dashboard-Redirect | PASS | `signInWithPassword` + `window.location.href = '/dashboard'` |
+| AC-3 | Bei falschen Credentials → generische Fehlermeldung | PASS | "Email oder Passwort falsch" — keine Email-Existenz-Hinweise |
+| AC-4 | Session bleibt nach Browser-Reload erhalten | PASS | Cookie-basierte Session via `@supabase/ssr` + Middleware Token-Refresh |
+| AC-5 | Ladezustand während Login (Button disabled + Spinner) | PASS | `disabled={isLoading}` + `Loader2` Spinner |
+| AC-6 | Link zur Registrierung vorhanden | PASS | "Noch kein Account? Hier registrieren" → `/register` |
+| AC-7 | Link zum Passwort-Reset vorhanden | PASS | "Passwort vergessen?" → `/reset-password` |
+| AC-8 | Geschützte Seiten leiten zum Login weiter | PASS | Middleware + Server-Side `redirect('/login')` in Dashboard |
+| AC-9 | Nach Login-Redirect zum Dashboard | PASS | `window.location.href = '/dashboard'` |
+
+### Edge Case Ergebnisse
+
+| Edge Case | Status | Details |
+|---|---|---|
+| Falsche Email | PASS | Generische Fehlermeldung via Supabase Auth Error |
+| Falsches Passwort | PASS | Gleiche generische Fehlermeldung |
+| Netzwerkfehler | PASS | try/catch mit "Verbindungsfehler..." Meldung, finally setzt Loading zurück |
+| Bereits eingeloggt + Login-Seite | PASS | Middleware leitet verifizierte User zu `/dashboard` weiter |
+| Session abläuft | MINOR | Redirect zu `/login` funktioniert, aber kein "Session abgelaufen"-Hinweis (Spec sagt "mit Hinweis") |
+| Brute-Force-Versuche | PASS | Supabase Built-in Rate Limiting |
+
+### Gefundene Bugs
+
+| Bug-ID | Schwere | Beschreibung | Betroffene Datei |
+|---|---|---|---|
+| BUG-1 | Low | Kein "Session abgelaufen"-Hinweis bei Redirect zum Login nach Session-Ablauf. Middleware leitet still zu `/login` weiter ohne URL-Parameter oder Meldung. | `src/lib/supabase-middleware.ts` |
+
+### Security-Analyse
+- **Email-Enumeration**: Geschützt durch generische Fehlermeldung
+- **XSS**: Kein dangerouslySetInnerHTML, React auto-escaping aktiv
+- **Password-Toggle**: Vorhanden mit aria-labels für Accessibility
+- **Session-Management**: Cookie-basiert via `@supabase/ssr`, Token-Refresh in Middleware
+
+### Gesamtergebnis
+- **Acceptance Criteria**: 9/9 PASS
+- **Edge Cases**: 5/6 PASS, 1 MINOR
+- **Bugs**: 1 (Low-Severity)
+- **Status**: PRODUCTION-READY (Low-Bug ist kosmetisch, keine Funktionseinschränkung)

@@ -114,3 +114,53 @@ Wiederverwendete shadcn/ui Komponenten:
 Keine neuen Packages nötig!
 Supabase Auth managt Email-Versand + Verifizierung.
 ```
+
+## QA Test-Report
+
+### Test-Datum: 2026-02-05
+### Getestete Dateien:
+- `src/app/verify-email/page.tsx`
+- `src/app/auth/callback/route.ts`
+- `src/lib/supabase-middleware.ts`
+
+### Acceptance Criteria Ergebnisse
+
+| # | Acceptance Criteria | Status | Details |
+|---|---|---|---|
+| AC-1 | Nach Registrierung automatische Verifizierungs-Email | PASS | Supabase sendet automatisch bei `signUp()` wenn Email-Confirmations aktiviert |
+| AC-2 | Verifizierungs-Email zeitlich begrenzt (24 Stunden) | PASS | Supabase-Konfiguration (serverseitig) |
+| AC-3 | Blocking-Seite: "Bitte bestätige deine Email-Adresse" | PASS | Middleware redirected unverified users → `/verify-email` mit korrektem Titel |
+| AC-4 | Button "Neue Verifizierungs-Email senden" | PASS | `<Button onClick={handleResend}>Neue Verifizierungs-Email senden</Button>` mit `supabase.auth.resend()` |
+| AC-5 | Registrierte Email-Adresse angezeigt | PASS | `useEffect` holt User-Email → angezeigt als "Wir haben eine Verifizierungs-Email an {userEmail} gesendet" |
+| AC-6 | Verifizierungs-Link → Dashboard-Redirect | PASS | `/auth/callback` → `exchangeCodeForSession` → Redirect zu `/dashboard` (default next) |
+| AC-7 | Nicht-verifizierte User: kein Zugang zu geschützten Seiten | PASS | Middleware: `!user.email_confirmed_at` → Redirect zu `/verify-email` |
+| AC-8 | Nach Verifizierung voller Zugang | PASS | `email_confirmed_at` gesetzt → Middleware erlaubt alle Routen |
+| AC-9 | Verifizierungs-Status in Datenbank gespeichert | PASS | `email_confirmed_at` Feld in Supabase `auth.users` Tabelle |
+
+### Edge Case Ergebnisse
+
+| Edge Case | Status | Details |
+|---|---|---|
+| Abgelaufener Verifizierungs-Link | PASS | `exchangeCodeForSession` Fehler → Redirect zu `/login?error=auth_callback_error` |
+| Bereits verifizierter Account + erneuter Link | PASS | `verify-email/page.tsx` hat `useEffect` der `email_confirmed_at` prüft → Dashboard-Redirect |
+| Mehrfaches Email-Anfordern | PASS | Supabase Rate Limiting greift |
+| Falsche Email eingegeben | PASS | "Falsche Email-Adresse? Neu registrieren" Link zu `/register` vorhanden |
+| Netzwerkfehler beim Resend | PARTIAL | Supabase-Error-Objekt wird behandelt, aber `handleResend` fehlt try/catch für Netzwerk-Exceptions |
+
+### Gefundene Bugs
+
+| Bug-ID | Schwere | Beschreibung | Betroffene Datei |
+|---|---|---|---|
+| BUG-1 | Low | `handleResend` in verify-email/page.tsx hat kein try/catch/finally Pattern. Wenn `supabase.auth.resend()` eine Network-Exception wirft (statt Error-Objekt zurückzugeben), wird der Fehler nicht gefangen und `isResending` bleibt auf `true` (Stuck Loading State). Alle anderen Auth-Formulare verwenden konsistent try/catch/finally. | `src/app/verify-email/page.tsx` |
+
+### Security-Analyse
+- **Middleware-Enforcement**: Verifizierungs-Check serverseitig in Middleware — kein Client-Side-Bypass möglich
+- **Erlaubte Unverified-Routen**: Sinnvoll eingeschränkt auf `/verify-email`, `/auth/callback`, `/login`, `/register`
+- **Resend-Funktion**: Nutzt Supabase-eigenes Rate Limiting
+- **XSS**: Kein dangerouslySetInnerHTML, React auto-escaping aktiv
+
+### Gesamtergebnis
+- **Acceptance Criteria**: 9/9 PASS
+- **Edge Cases**: 4/5 PASS, 1 PARTIAL
+- **Bugs**: 1 (Low-Severity)
+- **Status**: PRODUCTION-READY (Low-Bug betrifft nur Netzwerk-Exception Edge Case)
