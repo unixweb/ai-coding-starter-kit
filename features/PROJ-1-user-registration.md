@@ -1,6 +1,6 @@
 # PROJ-1: User Registration
 
-## Status: Planned
+## Status: Deploy-Ready (QA PRODUCTION-READY)
 
 ## Beschreibung
 Neue User können sich mit Email und Passwort registrieren, um einen Account zu erstellen.

@@ -1,6 +1,6 @@
 # PROJ-5: Logout
 
-## Status: Planned
+## Status: Deploy-Ready (QA PRODUCTION-READY)
 
 ## Beschreibung
 Eingeloggte User können sich über einen Button im Header/Navigation ausloggen. Die Session wird dabei vollständig beendet.

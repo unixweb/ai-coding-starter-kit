@@ -1,6 +1,6 @@
 # PROJ-2: User Login
 
-## Status: Planned
+## Status: Deploy-Ready (QA PRODUCTION-READY)
 
 ## Beschreibung
 Registrierte User können sich mit Email und Passwort einloggen. Die Session bleibt nach Browser-Reload automatisch erhalten.

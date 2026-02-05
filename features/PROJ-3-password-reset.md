@@ -1,6 +1,6 @@
 # PROJ-3: Passwort Reset
 
-## Status: Planned
+## Status: Deploy-Ready (QA PRODUCTION-READY)
 
 ## Beschreibung
 User können ihr Passwort über einen Email-Link zurücksetzen, falls sie es vergessen haben.

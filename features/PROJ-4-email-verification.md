@@ -1,6 +1,6 @@
 # PROJ-4: Email Verifizierung
 
-## Status: Planned
+## Status: Deploy-Ready (QA PRODUCTION-READY)
 
 ## Beschreibung
 Nach der Registrierung muss der User seine Email-Adresse bestätigen, bevor er die App nutzen kann. Ohne Verifizierung wird der Zugang zur App blockiert.
