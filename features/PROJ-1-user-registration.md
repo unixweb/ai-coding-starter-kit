@@ -305,3 +305,80 @@ Alles bereits vorhanden:
 
 **Spec-Update:**
 5. BUG-2 (Low): AC-9 anpassen -- Redirect zu /verify-email ist korrekt
+
+---
+
+## QA Re-Test Results (nach Bug-Fixes)
+
+**Re-Tested:** 2026-02-05
+**Commit:** 894f6b3
+**Methode:** Code-Review aller Bug-Fixes + Regression Test
+
+### Bug-Fix Verification
+
+#### BUG-1 (High): Doppelte Email erkennen
+- [x] **FIXED.** `authData.user.identities?.length === 0` Check in `register/page.tsx:97`
+- [x] Beide Pfade abgedeckt: `authError.message.includes('already registered')` UND leere identities
+- [x] Error-Message korrekt: "Email bereits verwendet"
+- **Status:** BESTANDEN
+
+#### BUG-2 (Low): Spec AC-9 anpassen
+- [x] **FIXED.** AC-9 in Spec geaendert zu: "zur Email-Verifizierung weitergeleitet (/verify-email)"
+- **Status:** BESTANDEN
+
+#### BUG-3 (Medium): try/catch fuer Netzwerkfehler
+- [x] **FIXED.** try/catch/finally auf allen 4 Auth-Seiten implementiert:
+  - [x] `register/page.tsx` -- try/catch + finally { setIsLoading(false) }
+  - [x] `login/page.tsx` -- try/catch + finally { setIsLoading(false) }
+  - [x] `reset-password/page.tsx` -- try/catch + finally { setIsLoading(false) }
+  - [x] `reset-password/confirm/page.tsx` -- try/catch + finally { setIsLoading(false) }
+- [x] Fehlermeldung: "Verbindungsfehler. Bitte pruefe deine Internetverbindung..."
+- [x] Loading-State wird in ALLEN Faellen zurueckgesetzt (finally-Block)
+- **Status:** BESTANDEN
+
+#### BUG-4 (Low): maxLength auf Input-Feldern
+- [x] **FIXED.** `maxLength={100}` auf Name-Input
+- [x] **FIXED.** `maxLength={255}` auf Email-Input
+- **Status:** BESTANDEN
+
+#### BUG-5 (Low): Passwort-Sichtbarkeits-Toggle
+- [x] **FIXED.** Eye/EyeOff Toggle auf allen Passwort-Feldern:
+  - [x] `register/page.tsx` -- 2 Toggles (Passwort + Bestaetigung)
+  - [x] `login/page.tsx` -- 1 Toggle (Passwort)
+  - [x] `reset-password/confirm/page.tsx` -- 2 Toggles (Neues Passwort + Bestaetigung)
+- [x] aria-label vorhanden: "Passwort verbergen" / "Passwort anzeigen"
+- [x] Toggle-Button ist type="button" (verhindert Form-Submit)
+- **Status:** BESTANDEN
+
+### Regression Test
+
+- [x] Build laeuft erfolgreich durch (`npm run build` -- keine Fehler)
+- [x] Alle 10 Routes korrekt registriert (/, /login, /register, /dashboard, etc.)
+- [x] Keine TypeScript-Fehler
+- [x] Keine neuen Warnings
+
+### Aktualisierte Acceptance Criteria (nach Fixes)
+
+- [x] AC-1: Formular mit Name, Email, Passwort, Passwort bestaetigen
+- [x] AC-2: Passwort-Validierung (8+ Zeichen, Gross/Klein, Zahl)
+- [x] AC-3: Passwort-Anforderungen als Live-Checkliste
+- [x] AC-4: Doppelte Email wird erkannt (Error + identities-Check)
+- [x] AC-5: Email-Format clientseitig validiert
+- [x] AC-6: Passwort-Bestaetigung muss uebereinstimmen
+- [x] AC-7: User-Account wird in Datenbank erstellt
+- [x] AC-8: Passwort gehasht gespeichert (Supabase bcrypt)
+- [x] AC-9: Redirect zu /verify-email nach Registrierung (Spec angepasst)
+- [x] AC-10: Ladezustand mit disabled Button + Spinner
+- [x] AC-11: Link zum Login vorhanden
+
+### Verbleibende bekannte Issues
+
+- SEC-5: Kein eigenes Rate Limiting (Supabase built-in reicht fuer MVP)
+- SEC-6: Email Enumeration (bewusste Design-Entscheidung aus Spec)
+
+### Re-Test Summary
+- 11/11 Acceptance Criteria BESTANDEN
+- 5/5 Bugs GEFIXT und verifiziert
+- 0 neue Bugs gefunden
+- Build + Regression: BESTANDEN
+- Feature ist **PRODUCTION-READY** (alle Critical/High/Medium Bugs gefixt)
