@@ -24,7 +24,7 @@ Kleine Teams (2-10 Personen), Startup-Teams
 - [ ] Passwort und Passwort-Bestätigung müssen übereinstimmen
 - [ ] Nach erfolgreicher Registrierung wird User-Account in der Datenbank erstellt
 - [ ] Passwort wird gehasht gespeichert (niemals Klartext)
-- [ ] Nach erfolgreicher Registrierung wird der User zum Dashboard weitergeleitet
+- [ ] Nach erfolgreicher Registrierung wird der User zur Email-Verifizierung weitergeleitet (/verify-email)
 - [ ] Formular zeigt Ladezustand während der Registrierung (Button disabled + Spinner)
 - [ ] Link zum Login für bestehende User vorhanden ("Bereits registriert? Hier einloggen")
 

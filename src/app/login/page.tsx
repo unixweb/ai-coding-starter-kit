@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +30,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 function LoginForm() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [showPassword, setShowPassword] = useState(false);
     const searchParams = useSearchParams();
 
     const callbackError = searchParams.get("error");
@@ -47,23 +48,29 @@ function LoginForm() {
         setIsLoading(true);
         setError(null);
 
-        const supabase = createClient();
-        const { data: authData, error: authError } =
-            await supabase.auth.signInWithPassword({
-                email: data.email,
-                password: data.password,
-            });
+        try {
+            const supabase = createClient();
+            const { data: authData, error: authError } =
+                await supabase.auth.signInWithPassword({
+                    email: data.email,
+                    password: data.password,
+                });
 
-        if (authError) {
-            setError("Email oder Passwort falsch");
-            setIsLoading(false);
-            return;
-        }
+            if (authError) {
+                setError("Email oder Passwort falsch");
+                return;
+            }
 
-        if (authData.session) {
-            window.location.href = "/dashboard";
-        } else {
-            setError("Login fehlgeschlagen. Bitte versuche es erneut.");
+            if (authData.session) {
+                window.location.href = "/dashboard";
+            } else {
+                setError("Login fehlgeschlagen. Bitte versuche es erneut.");
+            }
+        } catch {
+            setError(
+                "Verbindungsfehler. Bitte prüfe deine Internetverbindung und versuche es erneut.",
+            );
+        } finally {
             setIsLoading(false);
         }
     }
@@ -126,12 +133,31 @@ function LoginForm() {
                                 Passwort vergessen?
                             </Link>
                         </div>
-                        <Input
-                            id="password"
-                            type="password"
-                            autoComplete="current-password"
-                            {...register("password")}
-                        />
+                        <div className="relative">
+                            <Input
+                                id="password"
+                                type={showPassword ? "text" : "password"}
+                                autoComplete="current-password"
+                                className="pr-10"
+                                {...register("password")}
+                            />
+                            <button
+                                type="button"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                onClick={() => setShowPassword(!showPassword)}
+                                aria-label={
+                                    showPassword
+                                        ? "Passwort verbergen"
+                                        : "Passwort anzeigen"
+                                }
+                            >
+                                {showPassword ? (
+                                    <EyeOff className="h-4 w-4" />
+                                ) : (
+                                    <Eye className="h-4 w-4" />
+                                )}
+                            </button>
+                        </div>
                         {errors.password && (
                             <p className="text-sm text-destructive">
                                 {errors.password.message}
