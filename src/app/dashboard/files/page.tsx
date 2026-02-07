@@ -90,6 +90,7 @@ export default function FilesPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   // Rename dialog state
   const [renameFile, setRenameFile] = useState<FileEntry | null>(null);
@@ -117,19 +118,21 @@ export default function FilesPage() {
   }, []);
 
   useEffect(() => {
-    loadFiles();
-    // Get user name from supabase for the header
-    async function getUser() {
+    async function checkAuthAndLoad() {
       const { createClient } = await import("@/lib/supabase");
       const supabase = createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (user) {
-        setUserName(user.user_metadata?.name ?? user.email ?? null);
+      if (!user || !user.email_confirmed_at) {
+        window.location.href = "/login";
+        return;
       }
+      setUserName(user.user_metadata?.name ?? user.email ?? null);
+      setAuthChecked(true);
+      loadFiles();
     }
-    getUser();
+    checkAuthAndLoad();
   }, [loadFiles]);
 
   async function handleUpload(selectedFiles: FileList | File[]) {
@@ -200,7 +203,9 @@ export default function FilesPage() {
   }
 
   async function handleDownload(name: string) {
-    const res = await fetch(`/api/files/download?name=${encodeURIComponent(name)}`);
+    const res = await fetch(
+      `/api/files/download?name=${encodeURIComponent(name)}`,
+    );
     if (!res.ok) {
       setError("Download fehlgeschlagen");
       return;
@@ -221,7 +226,10 @@ export default function FilesPage() {
       const res = await fetch("/api/files/rename", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldName: renameFile.name, newName: newName.trim() }),
+        body: JSON.stringify({
+          oldName: renameFile.name,
+          newName: newName.trim(),
+        }),
       });
       if (res.ok) {
         setRenameFile(null);
@@ -264,6 +272,14 @@ export default function FilesPage() {
     const nameWithoutExt = file.name.replace(/\.[^.]+$/, "");
     setNewName(nameWithoutExt);
     setRenameFile(file);
+  }
+
+  if (!authChecked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-muted/30">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   return (

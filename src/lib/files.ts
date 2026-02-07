@@ -18,7 +18,37 @@ const ALLOWED_MIME_TYPES = new Set([
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const MAX_FILENAME_LENGTH = 200;
 
-export { UPLOAD_DIR, ALLOWED_MIME_TYPES, MAX_FILE_SIZE, MAX_FILENAME_LENGTH };
+/**
+ * Maps allowed file extensions to their valid MIME types.
+ * Used to cross-check that the file extension matches the declared MIME type.
+ */
+const EXTENSION_MIME_MAP: Record<string, string[]> = {
+  ".pdf": ["application/pdf"],
+  ".jpg": ["image/jpeg"],
+  ".jpeg": ["image/jpeg"],
+  ".png": ["image/png"],
+  ".gif": ["image/gif"],
+  ".webp": ["image/webp"],
+  ".doc": ["application/msword"],
+  ".docx": [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ],
+  ".xls": ["application/vnd.ms-excel"],
+  ".xlsx": [
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ],
+};
+
+const ALLOWED_EXTENSIONS = new Set(Object.keys(EXTENSION_MIME_MAP));
+
+export {
+  UPLOAD_DIR,
+  ALLOWED_MIME_TYPES,
+  MAX_FILE_SIZE,
+  MAX_FILENAME_LENGTH,
+  EXTENSION_MIME_MAP,
+  ALLOWED_EXTENSIONS,
+};
 
 /**
  * Returns the upload directory for a specific user and ensures it exists.
