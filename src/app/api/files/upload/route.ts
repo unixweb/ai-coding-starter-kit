@@ -1,15 +1,16 @@
 import { createClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
+import { put, list } from "@vercel/blob";
 import {
   ALLOWED_MIME_TYPES,
   ALLOWED_EXTENSIONS,
   EXTENSION_MIME_MAP,
   MAX_FILE_SIZE,
-  getUserUploadDir,
+  getUserBlobPrefix,
   sanitizeFilename,
-  getUniqueFilename,
+  getUniqueBlobName,
+  getExtension,
+  blobNameFromPathname,
 } from "@/lib/files";
 
 export async function POST(request: Request) {
@@ -37,7 +38,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const userDir = await getUserUploadDir(user.id);
+  const prefix = getUserBlobPrefix(user.id);
+
+  // Fetch existing filenames for deduplication
+  const existingNames = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const result = await list({ prefix, cursor });
+    for (const blob of result.blobs) {
+      existingNames.add(blobNameFromPathname(blob.pathname, prefix));
+    }
+    cursor = result.hasMore ? result.cursor : undefined;
+  } while (cursor);
+
   const uploaded: { name: string; size: number }[] = [];
   const errors: string[] = [];
 
@@ -58,7 +71,7 @@ export async function POST(request: Request) {
     }
 
     // Cross-check: file extension must match the declared MIME type
-    const ext = path.extname(file.name).toLowerCase();
+    const ext = getExtension(file.name);
     if (!ALLOWED_EXTENSIONS.has(ext)) {
       errors.push(`${file.name}: Dateiendung nicht erlaubt`);
       continue;
@@ -72,12 +85,16 @@ export async function POST(request: Request) {
     }
 
     const safeName = sanitizeFilename(file.name);
-    const uniqueName = await getUniqueFilename(userDir, safeName);
-    const filePath = path.join(userDir, uniqueName);
+    const uniqueName = getUniqueBlobName(existingNames, safeName);
+    const blobPathname = `${prefix}${uniqueName}`;
 
     try {
-      const buffer = Buffer.from(await file.arrayBuffer());
-      await fs.writeFile(filePath, buffer);
+      await put(blobPathname, file, {
+        access: "public",
+        addRandomSuffix: false,
+        contentType: file.type,
+      });
+      existingNames.add(uniqueName);
       uploaded.push({ name: uniqueName, size: file.size });
     } catch {
       errors.push(`${file.name}: Upload fehlgeschlagen`);

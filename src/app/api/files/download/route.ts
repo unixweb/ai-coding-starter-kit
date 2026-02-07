@@ -1,23 +1,7 @@
 import { createClient } from "@/lib/supabase-server";
 import { NextResponse, type NextRequest } from "next/server";
-import fs from "fs/promises";
-import path from "path";
-import { getUserUploadDir, isPathInside, sanitizeFilename } from "@/lib/files";
-
-const MIME_MAP: Record<string, string> = {
-  ".pdf": "application/pdf",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".doc": "application/msword",
-  ".docx":
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  ".xls": "application/vnd.ms-excel",
-  ".xlsx":
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-};
+import { head } from "@vercel/blob";
+import { getUserBlobPrefix, sanitizeFilename } from "@/lib/files";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -31,30 +15,30 @@ export async function GET(request: NextRequest) {
 
   const name = request.nextUrl.searchParams.get("name");
   if (!name) {
-    return NextResponse.json(
-      { error: "Dateiname fehlt" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Dateiname fehlt" }, { status: 400 });
   }
 
-  const userDir = await getUserUploadDir(user.id);
+  const prefix = getUserBlobPrefix(user.id);
   const safeName = sanitizeFilename(name);
-  const filePath = path.join(userDir, safeName);
-
-  if (!isPathInside(filePath, userDir)) {
-    return NextResponse.json({ error: "Zugriff verweigert" }, { status: 403 });
-  }
 
   try {
-    const buffer = await fs.readFile(filePath);
-    const ext = path.extname(safeName).toLowerCase();
-    const contentType = MIME_MAP[ext] || "application/octet-stream";
+    const blobMeta = await head(`${prefix}${safeName}`);
 
-    return new NextResponse(buffer, {
+    const blobResponse = await fetch(blobMeta.url);
+    if (!blobResponse.ok || !blobResponse.body) {
+      return NextResponse.json(
+        { error: "Datei nicht gefunden" },
+        { status: 404 },
+      );
+    }
+
+    const contentType = blobMeta.contentType || "application/octet-stream";
+
+    return new NextResponse(blobResponse.body, {
       headers: {
         "Content-Type": contentType,
         "Content-Disposition": `attachment; filename="${encodeURIComponent(safeName)}"`,
-        "Content-Length": buffer.length.toString(),
+        "Content-Length": blobMeta.size.toString(),
       },
     });
   } catch {

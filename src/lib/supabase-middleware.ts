@@ -50,6 +50,7 @@ export async function updateSession(request: NextRequest) {
     "/register",
     "/reset-password",
     "/auth/callback",
+    "/api/auth/",
   ];
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route),

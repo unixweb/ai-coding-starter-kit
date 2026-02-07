@@ -1,8 +1,3 @@
-import path from "path";
-import fs from "fs/promises";
-
-const UPLOAD_DIR = path.join(process.cwd(), "uploads");
-
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
   "image/jpeg",
@@ -42,7 +37,6 @@ const EXTENSION_MIME_MAP: Record<string, string[]> = {
 const ALLOWED_EXTENSIONS = new Set(Object.keys(EXTENSION_MIME_MAP));
 
 export {
-  UPLOAD_DIR,
   ALLOWED_MIME_TYPES,
   MAX_FILE_SIZE,
   MAX_FILENAME_LENGTH,
@@ -51,13 +45,11 @@ export {
 };
 
 /**
- * Returns the upload directory for a specific user and ensures it exists.
+ * Returns the Vercel Blob prefix for a specific user's files.
  */
-export async function getUserUploadDir(userId: string): Promise<string> {
+export function getUserBlobPrefix(userId: string): string {
   const safeId = sanitizePathSegment(userId);
-  const userDir = path.join(UPLOAD_DIR, safeId);
-  await fs.mkdir(userDir, { recursive: true });
-  return userDir;
+  return `${safeId}/`;
 }
 
 /**
@@ -72,14 +64,15 @@ export function sanitizePathSegment(segment: string): string {
  */
 export function sanitizeFilename(filename: string): string {
   // Remove directory components
-  let safe = path.basename(filename);
+  let safe = filename.split(/[/\\]/).pop() || filename;
   // Remove any null bytes
   safe = safe.replace(/\0/g, "");
   // Replace problematic characters but keep dots, spaces, hyphens, underscores, parens
   safe = safe.replace(/[^\w\s.\-()äöüÄÖÜß]/g, "_");
   // Trim to max length (keep extension)
   if (safe.length > MAX_FILENAME_LENGTH) {
-    const ext = path.extname(safe);
+    const dotIdx = safe.lastIndexOf(".");
+    const ext = dotIdx >= 0 ? safe.slice(dotIdx) : "";
     const name = safe.slice(0, MAX_FILENAME_LENGTH - ext.length);
     safe = name + ext;
   }
@@ -87,37 +80,41 @@ export function sanitizeFilename(filename: string): string {
 }
 
 /**
- * If a file with the same name exists, append (1), (2), etc.
+ * Given a set of existing filenames and a desired filename, returns a unique name
+ * by appending (1), (2), etc. if needed.
  */
-export async function getUniqueFilename(
-  dir: string,
+export function getUniqueBlobName(
+  existingNames: Set<string>,
   filename: string,
-): Promise<string> {
-  const ext = path.extname(filename);
-  const base = path.basename(filename, ext);
-  let candidate = filename;
-  let counter = 1;
+): string {
+  if (!existingNames.has(filename)) return filename;
 
-  while (true) {
-    try {
-      await fs.access(path.join(dir, candidate));
-      // File exists, try next number
-      candidate = `${base} (${counter})${ext}`;
-      counter++;
-    } catch {
-      // File does not exist, we can use this name
-      return candidate;
-    }
+  const dotIdx = filename.lastIndexOf(".");
+  const ext = dotIdx >= 0 ? filename.slice(dotIdx) : "";
+  const base = dotIdx >= 0 ? filename.slice(0, dotIdx) : filename;
+
+  let counter = 1;
+  let candidate = `${base} (${counter})${ext}`;
+  while (existingNames.has(candidate)) {
+    counter++;
+    candidate = `${base} (${counter})${ext}`;
   }
+  return candidate;
 }
 
 /**
- * Validates that a resolved path is inside the expected directory (prevents traversal).
+ * Extract the filename from a blob pathname (strip the user prefix).
  */
-export function isPathInside(childPath: string, parentPath: string): boolean {
-  const resolved = path.resolve(childPath);
-  const parent = path.resolve(parentPath);
-  return resolved.startsWith(parent + path.sep) || resolved === parent;
+export function blobNameFromPathname(pathname: string, prefix: string): string {
+  return pathname.startsWith(prefix) ? pathname.slice(prefix.length) : pathname;
+}
+
+/**
+ * Get the file extension from a filename (lowercase, with dot).
+ */
+export function getExtension(filename: string): string {
+  const dotIdx = filename.lastIndexOf(".");
+  return dotIdx >= 0 ? filename.slice(dotIdx).toLowerCase() : "";
 }
 
 /**
@@ -133,7 +130,7 @@ export function formatFileSize(bytes: number): string {
  * Get file extension label for display.
  */
 export function getFileTypeLabel(filename: string): string {
-  const ext = path.extname(filename).toLowerCase().replace(".", "");
+  const ext = getExtension(filename).replace(".", "");
   const labels: Record<string, string> = {
     pdf: "PDF",
     jpg: "JPG",

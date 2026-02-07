@@ -1,12 +1,11 @@
 import { createClient } from "@/lib/supabase-server";
 import { NextResponse, type NextRequest } from "next/server";
-import fs from "fs/promises";
-import path from "path";
+import { list, del, head } from "@vercel/blob";
 import {
-  getUserUploadDir,
-  isPathInside,
+  getUserBlobPrefix,
   getFileTypeLabel,
   sanitizeFilename,
+  blobNameFromPathname,
 } from "@/lib/files";
 
 export async function GET() {
@@ -19,36 +18,33 @@ export async function GET() {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  const userDir = await getUserUploadDir(user.id);
+  const prefix = getUserBlobPrefix(user.id);
 
-  let entries: string[];
-  try {
-    entries = await fs.readdir(userDir);
-  } catch {
-    return NextResponse.json({ files: [] });
-  }
-
-  const files = [];
-  for (const entry of entries) {
-    const filePath = path.join(userDir, entry);
-    try {
-      const stat = await fs.stat(filePath);
-      if (stat.isFile()) {
-        files.push({
-          name: entry,
-          size: stat.size,
-          type: getFileTypeLabel(entry),
-          uploadedAt: stat.birthtime.toISOString(),
-        });
-      }
-    } catch {
-      // Skip files we can't stat
+  const files: {
+    name: string;
+    size: number;
+    type: string;
+    uploadedAt: string;
+  }[] = [];
+  let cursor: string | undefined;
+  do {
+    const result = await list({ prefix, cursor });
+    for (const blob of result.blobs) {
+      const name = blobNameFromPathname(blob.pathname, prefix);
+      files.push({
+        name,
+        size: blob.size,
+        type: getFileTypeLabel(name),
+        uploadedAt: blob.uploadedAt.toISOString(),
+      });
     }
-  }
+    cursor = result.hasMore ? result.cursor : undefined;
+  } while (cursor);
 
   // Sort by upload date, newest first
   files.sort(
-    (a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
+    (a, b) =>
+      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
   );
 
   return NextResponse.json({ files });
@@ -66,23 +62,16 @@ export async function DELETE(request: NextRequest) {
 
   const name = request.nextUrl.searchParams.get("name");
   if (!name) {
-    return NextResponse.json(
-      { error: "Dateiname fehlt" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Dateiname fehlt" }, { status: 400 });
   }
 
-  const userDir = await getUserUploadDir(user.id);
+  const prefix = getUserBlobPrefix(user.id);
   const safeName = sanitizeFilename(name);
-  const filePath = path.join(userDir, safeName);
-
-  if (!isPathInside(filePath, userDir)) {
-    return NextResponse.json({ error: "Zugriff verweigert" }, { status: 403 });
-  }
+  const blobPathname = `${prefix}${safeName}`;
 
   try {
-    await fs.access(filePath);
-    await fs.unlink(filePath);
+    await head(blobPathname);
+    await del(blobPathname);
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json(

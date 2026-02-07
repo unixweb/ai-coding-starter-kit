@@ -1,12 +1,12 @@
 import { createClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
-import fs from "fs/promises";
-import path from "path";
+import { list, copy, del, head } from "@vercel/blob";
 import {
-  getUserUploadDir,
-  isPathInside,
+  getUserBlobPrefix,
   sanitizeFilename,
-  getUniqueFilename,
+  getUniqueBlobName,
+  getExtension,
+  blobNameFromPathname,
 } from "@/lib/files";
 import { z } from "zod";
 
@@ -37,41 +37,59 @@ export async function PATCH(request: Request) {
 
   const parsed = renameSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Ungueltige Eingaben" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Ungueltige Eingaben" }, { status: 400 });
   }
 
   const { oldName, newName } = parsed.data;
-  const userDir = await getUserUploadDir(user.id);
+  const prefix = getUserBlobPrefix(user.id);
 
   const safeOldName = sanitizeFilename(oldName);
-  const oldPath = path.join(userDir, safeOldName);
+  const oldBlobPathname = `${prefix}${safeOldName}`;
 
-  if (!isPathInside(oldPath, userDir)) {
-    return NextResponse.json({ error: "Zugriff verweigert" }, { status: 403 });
-  }
-
-  // Keep the original extension
-  const oldExt = path.extname(safeOldName);
-  const newBaseName = newName.replace(/\.[^.]+$/, ""); // strip any extension from new name
-  const safeNewName = sanitizeFilename(newBaseName + oldExt);
-  const uniqueNewName = await getUniqueFilename(userDir, safeNewName);
-  const newPath = path.join(userDir, uniqueNewName);
-
-  if (!isPathInside(newPath, userDir)) {
-    return NextResponse.json({ error: "Zugriff verweigert" }, { status: 403 });
-  }
-
+  // Get the old blob metadata
+  let oldBlob: Awaited<ReturnType<typeof head>>;
   try {
-    await fs.access(oldPath);
-    await fs.rename(oldPath, newPath);
-    return NextResponse.json({ name: uniqueNewName });
+    oldBlob = await head(oldBlobPathname);
   } catch {
     return NextResponse.json(
       { error: "Datei nicht gefunden" },
       { status: 404 },
+    );
+  }
+
+  // Keep the original extension
+  const oldExt = getExtension(safeOldName);
+  const newBaseName = newName.replace(/\.[^.]+$/, ""); // strip any extension from new name
+  const safeNewName = sanitizeFilename(newBaseName + oldExt);
+
+  // Fetch all existing names for deduplication
+  const existingNames = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const result = await list({ prefix, cursor });
+    for (const blob of result.blobs) {
+      existingNames.add(blobNameFromPathname(blob.pathname, prefix));
+    }
+    cursor = result.hasMore ? result.cursor : undefined;
+  } while (cursor);
+
+  // Remove old name from set so renaming to the same sanitized name works
+  existingNames.delete(safeOldName);
+
+  const uniqueNewName = getUniqueBlobName(existingNames, safeNewName);
+  const newBlobPathname = `${prefix}${uniqueNewName}`;
+
+  try {
+    await copy(oldBlob.url, newBlobPathname, {
+      access: "public",
+      contentType: oldBlob.contentType,
+    });
+    await del(oldBlob.url);
+    return NextResponse.json({ name: uniqueNewName });
+  } catch {
+    return NextResponse.json(
+      { error: "Umbenennen fehlgeschlagen" },
+      { status: 500 },
     );
   }
 }
