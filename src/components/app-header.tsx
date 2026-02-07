@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Loader2, FileText } from "lucide-react";
+import { LogOut, Loader2, FileText, Shield } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -33,8 +33,12 @@ export function AppHeader({ userName }: AppHeaderProps) {
     <header className="border-b bg-background">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-6">
-          <Link href="/dashboard" className="text-lg font-semibold">
-            AI Starter Kit
+          <Link
+            href="/dashboard"
+            className="flex items-center gap-2 text-lg font-semibold"
+          >
+            <Shield className="h-5 w-5 text-primary" />
+            SafeDocs Portal
           </Link>
           <nav className="hidden sm:flex items-center gap-1">
             <Link
