@@ -60,6 +60,24 @@ https://dein-projekt.vercel.app/auth/callback?next=/reset-password/confirm
 
 > Ersetze `dein-projekt.vercel.app` spaeter durch deine echte Vercel-Domain.
 
+### 1.5 Datenbank-Migration ausfuehren
+
+Die App benoetigt eine `profiles`-Tabelle in der Datenbank. Diese muss einmalig angelegt werden:
+
+1. Gehe in Supabase zu **SQL Editor** (linkes Menu)
+2. Klicke auf **"New Query"**
+3. Oeffne die Datei `supabase/migrations/001_create_profiles.sql` aus dem Projekt
+4. Kopiere den gesamten Inhalt und fuege ihn in den SQL Editor ein
+5. Klicke **"Run"** (oder Ctrl+Enter)
+6. Es sollte "Success. No rows returned" erscheinen
+
+Das Script erstellt:
+- `profiles`-Tabelle (speichert Name + Email pro User)
+- Row Level Security (jeder User sieht nur sein eigenes Profil)
+- Automatischer Trigger: Bei Registrierung wird ein Profil-Eintrag erstellt
+
+> **Wichtig:** Diesen Schritt nur einmal ausfuehren! Bei erneutem Ausfuehren passiert nichts Schlimmes (CREATE IF NOT EXISTS), aber die Trigger werden neu erstellt.
+
 #### E-Mail Templates (optional)
 
 1. Gehe zu **Authentication** → **Email Templates**
