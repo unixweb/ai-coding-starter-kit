@@ -1,38 +1,65 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import Link from 'next/link'
-import { LogOut, Loader2 } from 'lucide-react'
-import { createClient } from '@/lib/supabase'
-import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
+import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { LogOut, Loader2, FileText } from "lucide-react";
+import { createClient } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 interface AppHeaderProps {
-  userName?: string | null
+  userName?: string | null;
 }
 
 export function AppHeader({ userName }: AppHeaderProps) {
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const pathname = usePathname();
 
   async function handleLogout() {
-    setIsLoggingOut(true)
-    const supabase = createClient()
+    setIsLoggingOut(true);
+    const supabase = createClient();
 
     try {
-      await supabase.auth.signOut()
+      await supabase.auth.signOut();
     } catch {
       // Even on network error, clear local session
     }
 
-    window.location.href = '/login'
+    window.location.href = "/login";
   }
 
   return (
     <header className="border-b bg-background">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/dashboard" className="text-lg font-semibold">
-          AI Starter Kit
-        </Link>
+        <div className="flex items-center gap-6">
+          <Link href="/dashboard" className="text-lg font-semibold">
+            AI Starter Kit
+          </Link>
+          <nav className="hidden sm:flex items-center gap-1">
+            <Link
+              href="/dashboard"
+              className={`text-sm px-3 py-1.5 rounded-md transition-colors ${
+                pathname === "/dashboard"
+                  ? "bg-muted font-medium"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+            >
+              Dashboard
+            </Link>
+            <Link
+              href="/dashboard/files"
+              className={`text-sm px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
+                pathname === "/dashboard/files"
+                  ? "bg-muted font-medium"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Meine Dateien
+            </Link>
+          </nav>
+        </div>
         <div className="flex items-center gap-4">
           {userName && (
             <>
@@ -56,5 +83,5 @@ export function AppHeader({ userName }: AppHeaderProps) {
         </div>
       </div>
     </header>
-  )
+  );
 }
