@@ -27,6 +27,7 @@ Statt EINEM großen "Blog-Feature" → MEHRERE fokussierte Features:
 - ✅ `PROJ-4-post-comments.md` - Kommentar-System
 - ✅ `PROJ-5-post-likes.md` - Like/Unlike Funktionalität
 - ✅ `PROJ-6-admin-moderation.md` - Admin-spezifische Funktionen
+- ✅ `PROJ-X-weitere-features.md` - Lege weitere Dateien an für weitere Features
 
 ### Faustregel für Aufteilung:
 1. **Kann es unabhängig getestet werden?** → Eigenes Feature

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Loader2, FileText, Shield } from "lucide-react";
+import { LogOut, Loader2, FileText, Shield, LinkIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -61,6 +61,17 @@ export function AppHeader({ userName }: AppHeaderProps) {
             >
               <FileText className="h-3.5 w-3.5" />
               Meine Dateien
+            </Link>
+            <Link
+              href="/dashboard/portal"
+              className={`text-sm px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ${
+                pathname?.startsWith("/dashboard/portal")
+                  ? "bg-muted font-medium"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+              }`}
+            >
+              <LinkIcon className="h-3.5 w-3.5" />
+              Mandanten-Portal
             </Link>
           </nav>
         </div>
