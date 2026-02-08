@@ -64,6 +64,9 @@ WHERE client_email IS NOT NULL;
 
 -- 6. Update verify_portal_token function to include client_email
 -- This allows the portal page to know if there's a client email configured
+-- NOTE: Must DROP first because return type is changing
+DROP FUNCTION IF EXISTS public.verify_portal_token(TEXT);
+
 CREATE OR REPLACE FUNCTION public.verify_portal_token(lookup_token TEXT)
 RETURNS TABLE(
   id UUID,
