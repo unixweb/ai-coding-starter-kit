@@ -322,11 +322,16 @@ export default function PortalPage() {
                     return (
                       <TableRow key={link.id}>
                         <TableCell className="font-medium">
-                          {link.label || (
-                            <span className="text-muted-foreground italic">
-                              Kein Name
-                            </span>
-                          )}
+                          <Link
+                            href={`/dashboard/portal/${link.id}`}
+                            className="hover:text-primary hover:underline cursor-pointer"
+                          >
+                            {link.label || (
+                              <span className="text-muted-foreground italic">
+                                Kein Name
+                              </span>
+                            )}
+                          </Link>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
