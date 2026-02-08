@@ -11,6 +11,7 @@ import {
   FolderOpen,
   Loader2,
   LinkIcon,
+  Send,
 } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface PortalLink {
   id: string;
@@ -90,6 +97,13 @@ export default function PortalPage() {
 
   // Toggle loading
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  // Email dialog
+  const [emailLink, setEmailLink] = useState<PortalLink | null>(null);
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendSuccess, setSendSuccess] = useState(false);
 
   const loadLinks = useCallback(async () => {
     try {
@@ -184,6 +198,52 @@ export default function PortalPage() {
     }
   }
 
+  function openEmailDialog(link: PortalLink) {
+    setEmailLink(link);
+    setRecipientEmail("");
+    setSendError(null);
+    setSendSuccess(false);
+  }
+
+  async function handleSendEmail() {
+    if (!emailLink || !recipientEmail.trim()) return;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(recipientEmail.trim())) {
+      setSendError("Bitte geben Sie eine gueltige E-Mail-Adresse ein.");
+      return;
+    }
+
+    setIsSending(true);
+    setSendError(null);
+
+    try {
+      const res = await fetch("/api/portal/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          linkId: emailLink.id,
+          recipientEmail: recipientEmail.trim(),
+        }),
+      });
+
+      if (res.ok) {
+        setSendSuccess(true);
+        setTimeout(() => {
+          setEmailLink(null);
+          setSendSuccess(false);
+        }, 2000);
+      } else {
+        const data = await res.json();
+        setSendError(data.error || "E-Mail konnte nicht versendet werden.");
+      }
+    } catch {
+      setSendError("Verbindungsfehler. Bitte versuchen Sie es erneut.");
+    } finally {
+      setIsSending(false);
+    }
+  }
+
   if (!authChecked) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-muted/30">
@@ -252,7 +312,7 @@ export default function PortalPage() {
                       <TableHead className="w-24 text-center">
                         Einreichungen
                       </TableHead>
-                      <TableHead className="w-32 text-right">
+                      <TableHead className="w-40 text-right">
                         Aktionen
                       </TableHead>
                     </TableRow>
@@ -304,6 +364,30 @@ export default function PortalPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center justify-end gap-1">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => openEmailDialog(link)}
+                                        disabled={status.label !== "Aktiv"}
+                                      >
+                                        <Send className="h-4 w-4" />
+                                      </Button>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    {status.label === "Aktiv"
+                                      ? "Zugangslink senden"
+                                      : status.label === "Deaktiviert"
+                                        ? "Link ist deaktiviert"
+                                        : "Link ist abgelaufen"}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                               <Button
                                 variant="ghost"
                                 size="icon"
@@ -311,9 +395,7 @@ export default function PortalPage() {
                                 onClick={() => handleToggle(link)}
                                 disabled={togglingId === link.id}
                                 title={
-                                  link.is_active
-                                    ? "Deaktivieren"
-                                    : "Aktivieren"
+                                  link.is_active ? "Deaktivieren" : "Aktivieren"
                                 }
                               >
                                 {togglingId === link.id ? (
@@ -433,6 +515,75 @@ export default function PortalPage() {
           <DialogFooter>
             <Button onClick={() => setCreatedLink(null)}>Schliessen</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email Send Dialog */}
+      <Dialog
+        open={emailLink !== null}
+        onOpenChange={(open) => {
+          if (!open && !isSending) {
+            setEmailLink(null);
+            setSendSuccess(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Zugangslink senden</DialogTitle>
+            <DialogDescription>
+              {emailLink?.label
+                ? `Link "${emailLink.label}" per E-Mail versenden.`
+                : "Zugangslink per E-Mail an den Mandanten versenden."}
+            </DialogDescription>
+          </DialogHeader>
+          {sendSuccess ? (
+            <div className="flex flex-col items-center py-6 text-green-600">
+              <Check className="h-8 w-8 mb-2" />
+              <p className="text-sm font-medium">
+                E-Mail erfolgreich versendet!
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="recipientEmail">Empfaenger-E-Mail</Label>
+                  <Input
+                    id="recipientEmail"
+                    type="email"
+                    placeholder="mandant@beispiel.de"
+                    value={recipientEmail}
+                    onChange={(e) => {
+                      setRecipientEmail(e.target.value);
+                      if (sendError) setSendError(null);
+                    }}
+                  />
+                </div>
+                {sendError && (
+                  <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    {sendError}
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setEmailLink(null)}
+                  disabled={isSending}
+                >
+                  Abbrechen
+                </Button>
+                <Button
+                  onClick={handleSendEmail}
+                  disabled={isSending || !recipientEmail.trim()}
+                >
+                  {isSending && <Loader2 className="h-4 w-4 animate-spin" />}
+                  Senden
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </div>
