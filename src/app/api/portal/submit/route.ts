@@ -61,12 +61,8 @@ export async function POST(request: Request) {
     }>();
 
   if (linkError || !link) {
-    console.error("Token verify error:", JSON.stringify(linkError));
     return NextResponse.json(
-      {
-        error: "Dieser Link ist ungueltig",
-        details: linkError?.message || "Token nicht gefunden",
-      },
+      { error: "Dieser Link ist ungueltig" },
       { status: 404 },
     );
   }
@@ -115,17 +111,8 @@ export async function POST(request: Request) {
     .single();
 
   if (submissionError || !submission) {
-    console.error("Submission insert error:", JSON.stringify(submissionError));
     return NextResponse.json(
-      {
-        error: "Einreichung konnte nicht erstellt werden",
-        debug: {
-          message: submissionError?.message,
-          code: submissionError?.code,
-          hint: submissionError?.hint,
-          details: submissionError?.details,
-        },
-      },
+      { error: "Einreichung konnte nicht erstellt werden" },
       { status: 500 },
     );
   }
