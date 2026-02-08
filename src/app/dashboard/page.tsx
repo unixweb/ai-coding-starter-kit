@@ -8,8 +8,6 @@ import {
   BarChart3,
   Clock,
   Zap,
-  PlusCircle,
-  Settings,
   ArrowRight,
   FileText,
   Loader2,
@@ -24,6 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 interface DashboardStats {
+  userName: string;
   uploadsToday: number;
   uploadsThisWeek: number;
   activePortals: number;
@@ -59,7 +58,7 @@ function formatDateLong(): string {
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [userName, setUserName] = useState<string>("");
+  const [error, setError] = useState(false);
 
   const loadStats = useCallback(async () => {
     try {
@@ -67,29 +66,21 @@ export default function DashboardPage() {
       if (res.ok) {
         const data = await res.json();
         setStats(data);
+      } else {
+        setError(true);
       }
     } catch {
-      // silently fail
+      setError(true);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    async function init() {
-      const { createClient } = await import("@/lib/supabase");
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        setUserName(user.user_metadata?.name ?? user.email ?? "");
-      }
-      loadStats();
-    }
-    init();
+    loadStats();
   }, [loadStats]);
 
+  const userName = stats?.userName ?? "";
   const firstName = userName.split(" ")[0] || userName.split("@")[0] || "";
 
   return (
@@ -109,6 +100,11 @@ export default function DashboardPage() {
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : error ? (
+        <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">
+          Dashboard-Daten konnten nicht geladen werden. Bitte versuchen Sie es
+          spaeter erneut.
         </div>
       ) : stats ? (
         <>
@@ -212,13 +208,6 @@ export default function DashboardPage() {
                   href="/dashboard/portal"
                   className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm hover:bg-muted transition-colors"
                 >
-                  <PlusCircle className="h-4 w-4 text-green-600" />
-                  Neues Portal erstellen
-                </Link>
-                <Link
-                  href="/dashboard/portal"
-                  className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm hover:bg-muted transition-colors"
-                >
                   <FolderOpen className="h-4 w-4 text-blue-600" />
                   Portale verwalten
                 </Link>
@@ -228,13 +217,6 @@ export default function DashboardPage() {
                 >
                   <Upload className="h-4 w-4 text-purple-600" />
                   Alle Uploads anzeigen
-                </Link>
-                <Link
-                  href="/dashboard"
-                  className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm hover:bg-muted transition-colors"
-                >
-                  <Settings className="h-4 w-4 text-muted-foreground" />
-                  Einstellungen
                 </Link>
               </CardContent>
             </Card>

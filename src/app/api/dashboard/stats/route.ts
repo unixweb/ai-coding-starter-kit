@@ -15,7 +15,12 @@ export async function GET() {
 
   // Fetch files from Vercel Blob
   const prefix = `user/${user.id}/`;
-  const allFiles: { name: string; size: number; type: string; uploadedAt: string }[] = [];
+  const allFiles: {
+    name: string;
+    size: number;
+    type: string;
+    uploadedAt: string;
+  }[] = [];
 
   try {
     let cursor: string | undefined;
@@ -37,13 +42,16 @@ export async function GET() {
   }
 
   // Sort by date descending
-  allFiles.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+  allFiles.sort(
+    (a, b) =>
+      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
+  );
 
   // Calculate uploads today
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const uploadsToday = allFiles.filter(
-    (f) => new Date(f.uploadedAt) >= todayStart
+    (f) => new Date(f.uploadedAt) >= todayStart,
   ).length;
 
   // Calculate uploads this week
@@ -51,7 +59,7 @@ export async function GET() {
   weekStart.setDate(weekStart.getDate() - weekStart.getDay());
   weekStart.setHours(0, 0, 0, 0);
   const uploadsThisWeek = allFiles.filter(
-    (f) => new Date(f.uploadedAt) >= weekStart
+    (f) => new Date(f.uploadedAt) >= weekStart,
   ).length;
 
   // Last activity
@@ -76,7 +84,7 @@ export async function GET() {
     (l) =>
       l.is_active &&
       !l.is_locked &&
-      (!l.expires_at || new Date(l.expires_at) >= new Date())
+      (!l.expires_at || new Date(l.expires_at) >= new Date()),
   ).length;
 
   const inactivePortals = portalLinks.length - activePortals;
@@ -93,7 +101,7 @@ export async function GET() {
       (l) =>
         l.is_active &&
         !l.is_locked &&
-        (!l.expires_at || new Date(l.expires_at) >= new Date())
+        (!l.expires_at || new Date(l.expires_at) >= new Date()),
     )
     .slice(0, 3)
     .map((l) => ({
@@ -104,6 +112,7 @@ export async function GET() {
     }));
 
   return NextResponse.json({
+    userName: user.user_metadata?.name ?? user.email ?? "",
     uploadsToday,
     uploadsThisWeek,
     activePortals,
