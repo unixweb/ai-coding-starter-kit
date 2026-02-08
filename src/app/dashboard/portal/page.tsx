@@ -8,7 +8,6 @@ import {
   Check,
   ToggleLeft,
   ToggleRight,
-  FolderOpen,
   Loader2,
   LinkIcon,
   Send,
@@ -405,16 +404,6 @@ export default function PortalPage() {
                                 <ToggleLeft className="h-4 w-4 text-muted-foreground" />
                               )}
                             </Button>
-                            <Link href={`/dashboard/portal/${link.id}`}>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                title="Einreichungen ansehen"
-                              >
-                                <FolderOpen className="h-4 w-4" />
-                              </Button>
-                            </Link>
                           </div>
                         </TableCell>
                       </TableRow>
