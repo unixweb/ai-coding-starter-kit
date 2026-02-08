@@ -80,10 +80,15 @@ export default function PublicUploadPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load provided documents
-  const loadProvidedDocuments = useCallback(async () => {
+  const loadProvidedDocuments = useCallback(async (session?: string) => {
     try {
+      const headers: Record<string, string> = {};
+      if (session) {
+        headers["X-Portal-Session"] = session;
+      }
       const res = await fetch(
-        `/api/portal/outgoing/list?token=${encodeURIComponent(token)}`
+        `/api/portal/outgoing/list?token=${encodeURIComponent(token)}`,
+        { headers }
       );
       if (res.ok) {
         const data = await res.json();
@@ -201,7 +206,7 @@ export default function PublicUploadPage() {
       if (res.ok && data.success) {
         setSessionToken(data.sessionToken);
         setPageState("form");
-        loadProvidedDocuments();
+        loadProvidedDocuments(data.sessionToken);
       } else if (data.locked) {
         setErrorMessage(data.error || "Zugang gesperrt");
         setPageState("error");
