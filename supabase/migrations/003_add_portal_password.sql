@@ -50,6 +50,8 @@ $$;
 GRANT EXECUTE ON FUNCTION increment_failed_attempts(UUID) TO anon, authenticated;
 
 -- 4. Bestehende verify_portal_token erweitern: is_locked + has_password
+--    DROP noetig weil sich der Return-Type aendert (neue OUT-Parameter)
+DROP FUNCTION IF EXISTS verify_portal_token(TEXT);
 CREATE OR REPLACE FUNCTION verify_portal_token(lookup_token TEXT)
 RETURNS TABLE(
   id UUID,
