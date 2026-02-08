@@ -8,6 +8,7 @@ import { del, list } from "@vercel/blob";
 
 const CreateLinkSchema = z.object({
   label: z.string().max(200).optional().default(""),
+  clientEmail: z.string().email("Bitte eine gueltige E-Mail-Adresse eingeben"),
   expiresAt: z.string().datetime().optional(),
 });
 
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
       user_id: user.id,
       token,
       label: parsed.data.label,
+      client_email: parsed.data.clientEmail,
       expires_at: parsed.data.expiresAt || null,
       password_hash: hash,
       password_salt: salt,

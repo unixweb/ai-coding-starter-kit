@@ -133,9 +133,14 @@ export default function PortalPage() {
     setIsCreating(true);
     setError(null);
 
-    // Validate email format if provided
+    // Validate email - required field
     const emailTrimmed = newClientEmail.trim();
-    if (emailTrimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+    if (!emailTrimmed) {
+      setError("Bitte die Mandanten-E-Mail-Adresse eingeben");
+      setIsCreating(false);
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
       setError("Bitte eine gueltige E-Mail-Adresse eingeben");
       setIsCreating(false);
       return;
@@ -439,7 +444,7 @@ export default function PortalPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="clientEmail">Mandanten-E-Mail (optional)</Label>
+              <Label htmlFor="clientEmail">Mandanten-E-Mail *</Label>
               <Input
                 id="clientEmail"
                 type="email"
