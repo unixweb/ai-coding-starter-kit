@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase-server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import {
@@ -50,6 +51,12 @@ export async function POST(request: Request) {
 
   const supabase = await createClient();
 
+  // Service role client for DB writes (bypasses RLS - we do our own token validation)
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseAdmin = serviceRole
+    ? createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceRole)
+    : null;
+
   // Validate token using security-definer function (SEC-1 fix)
   const { data: link, error: linkError } = await supabase
     .rpc("verify_portal_token", { lookup_token: token })
@@ -98,7 +105,8 @@ export async function POST(request: Request) {
   }
 
   // Create submission record first to get the submission ID
-  const { data: submission, error: submissionError } = await supabase
+  const db = supabaseAdmin || supabase;
+  const { data: submission, error: submissionError } = await db
     .from("portal_submissions")
     .insert({
       link_id: link.id,
@@ -112,10 +120,7 @@ export async function POST(request: Request) {
 
   if (submissionError || !submission) {
     return NextResponse.json(
-      {
-        error: "Einreichung konnte nicht erstellt werden",
-        _debug: submissionError,
-      },
+      { error: "Einreichung konnte nicht erstellt werden" },
       { status: 500 },
     );
   }
@@ -172,7 +177,7 @@ export async function POST(request: Request) {
 
   // Update file count on submission
   if (uploaded.length > 0) {
-    await supabase
+    await db
       .from("portal_submissions")
       .update({ file_count: uploaded.length })
       .eq("id", submission.id);
@@ -180,7 +185,7 @@ export async function POST(request: Request) {
 
   // If no files were uploaded successfully, clean up the submission
   if (uploaded.length === 0) {
-    await supabase.from("portal_submissions").delete().eq("id", submission.id);
+    await db.from("portal_submissions").delete().eq("id", submission.id);
 
     return NextResponse.json(
       { error: errors.join(", ") || "Upload fehlgeschlagen" },
