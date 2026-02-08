@@ -89,6 +89,7 @@ export default function PortalPage() {
   // Create dialog
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newLabel, setNewLabel] = useState("");
+  const [newClientEmail, setNewClientEmail] = useState("");
   const [newExpiresAt, setNewExpiresAt] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
@@ -132,9 +133,18 @@ export default function PortalPage() {
     setIsCreating(true);
     setError(null);
 
+    // Validate email format if provided
+    const emailTrimmed = newClientEmail.trim();
+    if (emailTrimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      setError("Bitte eine gueltige E-Mail-Adresse eingeben");
+      setIsCreating(false);
+      return;
+    }
+
     try {
-      const body: Record<string, string> = {};
+      const body: Record<string, string | null> = {};
       if (newLabel.trim()) body.label = newLabel.trim();
+      if (emailTrimmed) body.clientEmail = emailTrimmed;
       if (newExpiresAt) body.expiresAt = new Date(newExpiresAt).toISOString();
 
       const res = await fetch("/api/portal/links", {
@@ -147,6 +157,7 @@ export default function PortalPage() {
         const data = await res.json();
         setShowCreateDialog(false);
         setNewLabel("");
+        setNewClientEmail("");
         setNewExpiresAt("");
         setCreatedLink({
           url: getFullUrl(data.link.token),
@@ -426,6 +437,19 @@ export default function PortalPage() {
                 onChange={(e) => setNewLabel(e.target.value)}
                 maxLength={200}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="clientEmail">Mandanten-E-Mail (optional)</Label>
+              <Input
+                id="clientEmail"
+                type="email"
+                placeholder="mandant@beispiel.de"
+                value={newClientEmail}
+                onChange={(e) => setNewClientEmail(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Fuer automatische Benachrichtigungen bei bereitgestellten Dokumenten
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="expiresAt">Ablaufdatum (optional)</Label>

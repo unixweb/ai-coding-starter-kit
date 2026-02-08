@@ -12,6 +12,8 @@ import {
   X,
   Loader2,
   FileText,
+  Download,
+  FolderDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +29,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 
 const MAX_FILES = 10;
+
+interface ProvidedDocument {
+  id: string;
+  filename: string;
+  file_size: number;
+  note: string;
+}
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -64,7 +73,26 @@ export default function PublicUploadPage() {
   const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
   const [uploadedCount, setUploadedCount] = useState(0);
 
+  // Provided documents state
+  const [providedDocuments, setProvidedDocuments] = useState<ProvidedDocument[]>([]);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load provided documents
+  const loadProvidedDocuments = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/portal/outgoing/list?token=${encodeURIComponent(token)}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setProvidedDocuments(data.files || []);
+      }
+    } catch {
+      // Silently fail - documents section just won't show
+    }
+  }, [token]);
 
   // Validate token on mount
   const validateToken = useCallback(async () => {
@@ -79,6 +107,7 @@ export default function PublicUploadPage() {
           setPageState("password");
         } else {
           setPageState("form");
+          loadProvidedDocuments();
         }
       } else {
         setErrorMessage(data.reason || "Dieser Link ist ungueltig");
@@ -88,7 +117,7 @@ export default function PublicUploadPage() {
       setErrorMessage("Verbindungsfehler. Bitte versuchen Sie es spaeter.");
       setPageState("error");
     }
-  }, [token]);
+  }, [token, loadProvidedDocuments]);
 
   useEffect(() => {
     validateToken();
@@ -130,6 +159,30 @@ export default function PublicUploadPage() {
     }
   }
 
+  async function handleDocumentDownload(fileId: string, filename: string) {
+    setDownloadingId(fileId);
+    try {
+      const url = `/api/portal/outgoing/download?fileId=${encodeURIComponent(fileId)}&token=${encodeURIComponent(token)}`;
+      const res = await fetch(url);
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(downloadUrl);
+        document.body.removeChild(a);
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
   async function handlePasswordSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!passwordValue.trim()) return;
@@ -148,6 +201,7 @@ export default function PublicUploadPage() {
       if (res.ok && data.success) {
         setSessionToken(data.sessionToken);
         setPageState("form");
+        loadProvidedDocuments();
       } else if (data.locked) {
         setErrorMessage(data.error || "Zugang gesperrt");
         setPageState("error");
@@ -392,6 +446,63 @@ export default function PublicUploadPage() {
                 verschluesselt uebertragen.
               </p>
             </div>
+
+            {/* Provided Documents Section */}
+            {providedDocuments.length > 0 && (
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FolderDown className="h-5 w-5 text-blue-600" />
+                    Fuer Sie bereitgestellt
+                  </CardTitle>
+                  <CardDescription>
+                    Folgende Dokumente wurden fuer Sie bereitgestellt
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {providedDocuments.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between rounded-lg border p-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{doc.filename}</p>
+                            {doc.note && (
+                              <p className="text-sm text-muted-foreground truncate">
+                                {doc.note}
+                              </p>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                              {formatSize(doc.file_size)}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDocumentDownload(doc.id, doc.filename)}
+                          disabled={downloadingId === doc.id}
+                        >
+                          {downloadingId === doc.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Download className="h-4 w-4" />
+                          )}
+                          Herunterladen
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 rounded-md bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+                    Laden Sie das bearbeitete Dokument ueber das Formular unten
+                    wieder hoch.
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>

@@ -34,6 +34,7 @@ interface PortalSettingsProps {
   description: string;
   isActive: boolean;
   hasPassword: boolean;
+  clientEmail?: string | null;
   onSaved: () => void;
 }
 
@@ -43,12 +44,14 @@ export function PortalSettings({
   description: initialDescription,
   isActive: initialIsActive,
   hasPassword,
+  clientEmail: initialClientEmail,
   onSaved,
 }: PortalSettingsProps) {
   const router = useRouter();
   const [label, setLabel] = useState(initialLabel);
   const [description, setDescription] = useState(initialDescription);
   const [isActive, setIsActive] = useState(initialIsActive);
+  const [clientEmail, setClientEmail] = useState(initialClientEmail || "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -63,6 +66,12 @@ export function PortalSettings({
       toast.error("Passwort muss mindestens 8 Zeichen haben");
       return;
     }
+    // Validate email format if provided
+    const emailTrimmed = clientEmail.trim();
+    if (emailTrimmed && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      toast.error("Bitte eine gueltige E-Mail-Adresse eingeben");
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -74,6 +83,7 @@ export function PortalSettings({
           label: label.trim(),
           description: description.trim(),
           is_active: isActive,
+          client_email: emailTrimmed || null,
           password: password || "",
         }),
       });
@@ -143,6 +153,20 @@ export function PortalSettings({
             rows={2}
             maxLength={500}
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="client_email">Mandanten-E-Mail (optional)</Label>
+          <Input
+            id="client_email"
+            type="email"
+            value={clientEmail}
+            onChange={(e) => setClientEmail(e.target.value)}
+            placeholder="mandant@beispiel.de"
+          />
+          <p className="text-xs text-muted-foreground">
+            Fuer automatische Benachrichtigungen bei bereitgestellten Dokumenten
+          </p>
         </div>
 
         <div className="space-y-2">

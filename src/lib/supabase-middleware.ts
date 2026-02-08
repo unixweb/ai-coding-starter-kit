@@ -55,6 +55,8 @@ export async function updateSession(request: NextRequest) {
     "/api/portal/submit",
     "/api/portal/verify",
     "/api/portal/verify-password",
+    "/api/portal/outgoing/download",
+    "/api/portal/outgoing/list",
   ];
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route),

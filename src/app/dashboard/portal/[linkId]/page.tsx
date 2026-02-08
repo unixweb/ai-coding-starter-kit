@@ -9,6 +9,10 @@ import { PortalSettings } from "./portal-settings";
 import { PortalFileList, type FlatFile } from "./portal-file-list";
 import { PortalLinkCard } from "./portal-link-card";
 import { PortalStatsCard } from "./portal-stats-card";
+import {
+  PortalOutgoingFiles,
+  type OutgoingFile,
+} from "./portal-outgoing-files";
 
 interface SubmissionFile {
   name: string;
@@ -38,6 +42,7 @@ interface LinkInfo {
   has_password: boolean;
   expires_at: string | null;
   created_at: string;
+  client_email: string | null;
 }
 
 function getStatusBadge(link: LinkInfo) {
@@ -79,21 +84,29 @@ export default function PortalDetailPage() {
 
   const [link, setLink] = useState<LinkInfo | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [outgoingFiles, setOutgoingFiles] = useState<OutgoingFile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
-      const res = await fetch(
-        `/api/portal/submissions?linkId=${encodeURIComponent(linkId)}`,
-      );
-      if (res.ok) {
-        const data = await res.json();
+      const [submissionsRes, outgoingRes] = await Promise.all([
+        fetch(`/api/portal/submissions?linkId=${encodeURIComponent(linkId)}`),
+        fetch(`/api/portal/outgoing?linkId=${encodeURIComponent(linkId)}`),
+      ]);
+
+      if (submissionsRes.ok) {
+        const data = await submissionsRes.json();
         setLink(data.link);
         setSubmissions(data.submissions);
         setError(null);
       } else {
         setError("Daten konnten nicht geladen werden");
+      }
+
+      if (outgoingRes.ok) {
+        const outgoingData = await outgoingRes.json();
+        setOutgoingFiles(outgoingData.files || []);
       }
     } catch {
       setError("Verbindungsfehler");
@@ -162,7 +175,14 @@ export default function PortalDetailPage() {
             description={link.description}
             isActive={link.is_active}
             hasPassword={link.has_password}
+            clientEmail={link.client_email}
             onSaved={loadData}
+          />
+
+          <PortalOutgoingFiles
+            files={outgoingFiles}
+            linkId={link.id}
+            onFilesChanged={loadData}
           />
 
           <PortalFileList
@@ -178,6 +198,8 @@ export default function PortalDetailPage() {
             token={link.token}
             isActive={link.is_active}
             linkId={link.id}
+            clientEmail={link.client_email}
+            onFilesUploaded={loadData}
           />
 
           <PortalStatsCard

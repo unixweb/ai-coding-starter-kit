@@ -19,6 +19,9 @@ const UpdateLinkSchema = z.object({
   password: z
     .union([z.string().min(8, "Mindestens 8 Zeichen"), z.literal("")])
     .optional(),
+  client_email: z
+    .union([z.string().email("Ungueltige E-Mail-Adresse"), z.literal(""), z.null()])
+    .optional(),
 });
 
 export async function GET() {
@@ -138,6 +141,11 @@ export async function PATCH(request: Request) {
     updateData.description = parsed.data.description;
   if (parsed.data.is_active !== undefined)
     updateData.is_active = parsed.data.is_active;
+  if (parsed.data.client_email !== undefined) {
+    // Empty string or null clears the email
+    updateData.client_email =
+      parsed.data.client_email === "" ? null : parsed.data.client_email;
+  }
 
   // Handle password: non-empty string = set new password, empty string = no change
   if (parsed.data.password && parsed.data.password.length > 0) {
