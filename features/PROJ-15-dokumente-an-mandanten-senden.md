@@ -1,6 +1,6 @@
 # PROJ-15: Dokumente an Mandanten senden
 
-## Status: Planned
+## Status: ✅ Done
 
 ## Beschreibung
 
