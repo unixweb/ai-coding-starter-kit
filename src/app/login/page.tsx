@@ -81,6 +81,9 @@ function LoginForm() {
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
+        <div className="flex justify-center mb-2">
+          <img src="/favicon.svg" alt="SafeDocs Portal" className="h-12 w-12" />
+        </div>
         <CardTitle className="text-2xl font-bold">Willkommen zurück</CardTitle>
         <CardDescription>Melde dich mit deinem Account an</CardDescription>
       </CardHeader>

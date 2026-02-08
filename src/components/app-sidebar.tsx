@@ -2,12 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  FolderOpen,
-  Upload,
-  Shield,
-} from "lucide-react";
+import { LayoutDashboard, FolderOpen, Upload } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -34,7 +29,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="border-b px-4 py-3">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <Shield className="h-5 w-5 text-primary" />
+          <img src="/favicon.svg" alt="SafeDocs Portal" className="h-6 w-6" />
           <span className="text-lg font-semibold">SafeDocs Portal</span>
         </Link>
       </SidebarHeader>
