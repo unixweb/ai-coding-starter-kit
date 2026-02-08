@@ -1,42 +1,344 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase-server'
-import { AppHeader } from '@/components/app-header'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+"use client";
 
-export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import {
+  Upload,
+  FolderOpen,
+  BarChart3,
+  Clock,
+  Zap,
+  PlusCircle,
+  Settings,
+  ArrowRight,
+  FileText,
+  Loader2,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
-  if (!user) {
-    redirect('/login')
-  }
+interface DashboardStats {
+  uploadsToday: number;
+  uploadsThisWeek: number;
+  activePortals: number;
+  inactivePortals: number;
+  totalUploads: number;
+  totalSubmissions: number;
+  lastActivity: string | null;
+  recentFiles: { name: string; size: string; uploadedAt: string }[];
+  activePortalLinks: {
+    id: string;
+    label: string;
+    submission_count: number;
+    is_active: boolean;
+  }[];
+}
 
-  const userName = user.user_metadata?.name ?? user.email
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("de-DE", {
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatDateLong(): string {
+  return new Date().toLocaleDateString("de-DE", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+export default function DashboardPage() {
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userName, setUserName] = useState<string>("");
+
+  const loadStats = useCallback(async () => {
+    try {
+      const res = await fetch("/api/dashboard/stats");
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    async function init() {
+      const { createClient } = await import("@/lib/supabase");
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        setUserName(user.user_metadata?.name ?? user.email ?? "");
+      }
+      loadStats();
+    }
+    init();
+  }, [loadStats]);
+
+  const firstName = userName.split(" ")[0] || userName.split("@")[0] || "";
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <AppHeader userName={userName} />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-muted-foreground">
-            Willkommen zurück, {userName}
-          </p>
+    <div className="p-6 lg:p-8 space-y-8">
+      {/* Welcome Section */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+          <span className="text-2xl">&#128075;</span>
+          Willkommen zurueck, {firstName}!
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Ihre Uebersicht fuer den {formatDateLong()}
+        </p>
+      </div>
+
+      {/* Stats Cards */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>Erste Schritte</CardTitle>
-            <CardDescription>
-              Dein Account ist eingerichtet. Hier werden zukünftige Features angezeigt.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Diese Seite dient als Platzhalter für zukünftige Inhalte.
-            </p>
-          </CardContent>
-        </Card>
-      </main>
+      ) : stats ? (
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Uploads heute */}
+            <Card className="border-l-4 border-l-blue-500">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-600">
+                      Uploads heute
+                    </p>
+                    <p className="text-3xl font-bold mt-1">
+                      {stats.uploadsToday}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      +{stats.uploadsThisWeek} diese Woche
+                    </p>
+                  </div>
+                  <Upload className="h-8 w-8 text-blue-500 opacity-80" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Aktive Portale */}
+            <Card className="border-l-4 border-l-green-500">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-green-600">
+                      Aktive Portale
+                    </p>
+                    <p className="text-3xl font-bold mt-1">
+                      {stats.activePortals}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {stats.inactivePortals} inaktiv
+                    </p>
+                  </div>
+                  <FolderOpen className="h-8 w-8 text-green-500 opacity-80" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Uploads gesamt */}
+            <Card className="border-l-4 border-l-purple-500">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-purple-600">
+                      Uploads gesamt
+                    </p>
+                    <p className="text-3xl font-bold mt-1">
+                      {stats.totalUploads}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Dateien hochgeladen
+                    </p>
+                  </div>
+                  <BarChart3 className="h-8 w-8 text-purple-500 opacity-80" />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Letzte Aktivitaet */}
+            <Card className="border-l-4 border-l-orange-500">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-orange-600">
+                      Letzte Aktivitaet
+                    </p>
+                    <p className="text-2xl font-bold mt-1">
+                      {stats.lastActivity
+                        ? formatDate(stats.lastActivity)
+                        : "—"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Letzter Upload
+                    </p>
+                  </div>
+                  <Clock className="h-8 w-8 text-orange-500 opacity-80" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Middle Section: Schnellaktionen + Letzte Uploads */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Schnellaktionen */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Zap className="h-5 w-5 text-yellow-500" />
+                  Schnellaktionen
+                </CardTitle>
+                <CardDescription>Haeufig verwendete Aktionen</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                <Link
+                  href="/dashboard/portal"
+                  className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm hover:bg-muted transition-colors"
+                >
+                  <PlusCircle className="h-4 w-4 text-green-600" />
+                  Neues Portal erstellen
+                </Link>
+                <Link
+                  href="/dashboard/portal"
+                  className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm hover:bg-muted transition-colors"
+                >
+                  <FolderOpen className="h-4 w-4 text-blue-600" />
+                  Portale verwalten
+                </Link>
+                <Link
+                  href="/dashboard/files"
+                  className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm hover:bg-muted transition-colors"
+                >
+                  <Upload className="h-4 w-4 text-purple-600" />
+                  Alle Uploads anzeigen
+                </Link>
+                <Link
+                  href="/dashboard"
+                  className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm hover:bg-muted transition-colors"
+                >
+                  <Settings className="h-4 w-4 text-muted-foreground" />
+                  Einstellungen
+                </Link>
+              </CardContent>
+            </Card>
+
+            {/* Letzte Uploads */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg">Letzte Uploads</CardTitle>
+                    <CardDescription>
+                      Kuerzlich hochgeladene Dateien
+                    </CardDescription>
+                  </div>
+                  <Link
+                    href="/dashboard/files"
+                    className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  >
+                    Alle <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {stats.recentFiles.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">
+                    Noch keine Dateien hochgeladen
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {stats.recentFiles.map((file) => (
+                      <div key={file.name} className="flex items-center gap-3">
+                        <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">
+                            {file.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {file.size} · {formatDate(file.uploadedAt)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Ihre Portale */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <FolderOpen className="h-5 w-5 text-green-600" />
+                    Ihre Portale
+                  </CardTitle>
+                  <CardDescription>Aktive Upload-Portale</CardDescription>
+                </div>
+                <Link
+                  href="/dashboard/portal"
+                  className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+                >
+                  Alle <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {stats.activePortalLinks.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  Noch keine Portale erstellt
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {stats.activePortalLinks.map((portal) => (
+                    <Link
+                      key={portal.id}
+                      href={`/dashboard/portal/${portal.id}`}
+                      className="flex items-center justify-between rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <FolderOpen className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {portal.label}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {portal.submission_count} Upload
+                            {portal.submission_count !== 1 ? "s" : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge
+                        variant="default"
+                        className="ml-2 flex-shrink-0 h-2 w-2 rounded-full p-0 bg-green-500"
+                      />
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      ) : null}
     </div>
-  )
+  );
 }

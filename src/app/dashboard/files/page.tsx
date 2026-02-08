@@ -13,7 +13,6 @@ import {
   Loader2,
   CloudUpload,
 } from "lucide-react";
-import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -89,8 +88,6 @@ export default function FilesPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [userName, setUserName] = useState<string | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
 
   // Rename dialog state
   const [renameFile, setRenameFile] = useState<FileEntry | null>(null);
@@ -118,21 +115,7 @@ export default function FilesPage() {
   }, []);
 
   useEffect(() => {
-    async function checkAuthAndLoad() {
-      const { createClient } = await import("@/lib/supabase");
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user || !user.email_confirmed_at) {
-        window.location.href = "/login";
-        return;
-      }
-      setUserName(user.user_metadata?.name ?? user.email ?? null);
-      setAuthChecked(true);
-      loadFiles();
-    }
-    checkAuthAndLoad();
+    loadFiles();
   }, [loadFiles]);
 
   async function handleUpload(selectedFiles: FileList | File[]) {
@@ -274,176 +257,161 @@ export default function FilesPage() {
     setRenameFile(file);
   }
 
-  if (!authChecked) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-muted/30">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-muted/30">
-      <AppHeader userName={userName} />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">Meine Dateien</h1>
-          <p className="mt-1 text-muted-foreground">
-            Dateien hochladen und verwalten
-          </p>
-        </div>
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">Meine Dateien</h1>
+        <p className="mt-1 text-muted-foreground">
+          Dateien hochladen und verwalten
+        </p>
+      </div>
 
-        {/* Upload Area */}
-        <Card className="mb-8">
-          <CardContent className="pt-6">
-            <div
-              className={`relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition-colors cursor-pointer ${
-                isDragOver
-                  ? "border-primary bg-primary/5"
-                  : "border-muted-foreground/25 hover:border-muted-foreground/50"
-              }`}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <CloudUpload
-                className={`h-10 w-10 mb-3 ${isDragOver ? "text-primary" : "text-muted-foreground"}`}
-              />
-              <p className="text-sm font-medium">
-                Dateien hier ablegen oder klicken
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                PDF, Bilder, Word, Excel - max. 10 MB
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files.length > 0) {
-                    handleUpload(e.target.files);
-                    e.target.value = "";
-                  }
-                }}
-              />
+      {/* Upload Area */}
+      <Card className="mb-8">
+        <CardContent className="pt-6">
+          <div
+            className={`relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 transition-colors cursor-pointer ${
+              isDragOver
+                ? "border-primary bg-primary/5"
+                : "border-muted-foreground/25 hover:border-muted-foreground/50"
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <CloudUpload
+              className={`h-10 w-10 mb-3 ${isDragOver ? "text-primary" : "text-muted-foreground"}`}
+            />
+            <p className="text-sm font-medium">
+              Dateien hier ablegen oder klicken
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              PDF, Bilder, Word, Excel - max. 10 MB
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  handleUpload(e.target.files);
+                  e.target.value = "";
+                }
+              }}
+            />
+          </div>
+
+          {isUploading && (
+            <div className="mt-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Wird hochgeladen...</span>
+              </div>
+              <Progress value={uploadProgress} />
             </div>
+          )}
 
-            {isUploading && (
-              <div className="mt-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm">Wird hochgeladen...</span>
-                </div>
-                <Progress value={uploadProgress} />
-              </div>
-            )}
+          {error && (
+            <div className="mt-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
 
-            {error && (
-              <div className="mt-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
-              </div>
-            )}
+          {success && (
+            <div className="mt-4 rounded-md bg-green-50 p-3 text-sm text-green-700">
+              {success}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-            {success && (
-              <div className="mt-4 rounded-md bg-green-50 p-3 text-sm text-green-700">
-                {success}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* File List */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Hochgeladene Dateien</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : files.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Upload className="h-10 w-10 mb-3" />
-                <p className="text-sm">Noch keine Dateien hochgeladen</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead className="w-20">Typ</TableHead>
-                      <TableHead className="w-24">Groesse</TableHead>
-                      <TableHead className="w-40">Datum</TableHead>
-                      <TableHead className="w-32 text-right">
-                        Aktionen
-                      </TableHead>
+      {/* File List */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Hochgeladene Dateien</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : files.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Upload className="h-10 w-10 mb-3" />
+              <p className="text-sm">Noch keine Dateien hochgeladen</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="w-20">Typ</TableHead>
+                    <TableHead className="w-24">Groesse</TableHead>
+                    <TableHead className="w-40">Datum</TableHead>
+                    <TableHead className="w-32 text-right">Aktionen</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {files.map((file) => (
+                    <TableRow key={file.name}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getFileIcon(file.type)}
+                          <span className="truncate max-w-xs">{file.name}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {file.type}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatSize(file.size)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatDate(file.uploadedAt)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleDownload(file.name)}
+                            title="Herunterladen"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => openRenameDialog(file)}
+                            title="Umbenennen"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteFile(file)}
+                            title="Loeschen"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {files.map((file) => (
-                      <TableRow key={file.name}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getFileIcon(file.type)}
-                            <span className="truncate max-w-xs">
-                              {file.name}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {file.type}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {formatSize(file.size)}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {formatDate(file.uploadedAt)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => handleDownload(file.name)}
-                              title="Herunterladen"
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              onClick={() => openRenameDialog(file)}
-                              title="Umbenennen"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={() => setDeleteFile(file)}
-                              title="Loeschen"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </main>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Rename Dialog */}
       <Dialog

@@ -13,7 +13,6 @@ import {
   LinkIcon,
   Send,
 } from "lucide-react";
-import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -85,8 +84,6 @@ function getFullUrl(token: string): string {
 export default function PortalPage() {
   const [links, setLinks] = useState<PortalLink[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [userName, setUserName] = useState<string | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Create dialog
@@ -128,21 +125,7 @@ export default function PortalPage() {
   }, []);
 
   useEffect(() => {
-    async function checkAuthAndLoad() {
-      const { createClient } = await import("@/lib/supabase");
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user || !user.email_confirmed_at) {
-        window.location.href = "/login";
-        return;
-      }
-      setUserName(user.user_metadata?.name ?? user.email ?? null);
-      setAuthChecked(true);
-      loadLinks();
-    }
-    checkAuthAndLoad();
+    loadLinks();
   }, [loadLinks]);
 
   async function handleCreate() {
@@ -255,190 +238,173 @@ export default function PortalPage() {
     }
   }
 
-  if (!authChecked) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-muted/30">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-muted/30">
-      <AppHeader userName={userName} />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Mandanten-Portal
-            </h1>
-            <p className="mt-1 text-muted-foreground">
-              Einladungslinks erstellen und Einreichungen verwalten
-            </p>
-          </div>
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="h-4 w-4" />
-            Neuen Link erstellen
-          </Button>
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Mandanten-Portal
+          </h1>
+          <p className="mt-1 text-muted-foreground">
+            Einladungslinks erstellen und Einreichungen verwalten
+          </p>
         </div>
+        <Button onClick={() => setShowCreateDialog(true)}>
+          <Plus className="h-4 w-4" />
+          Neuen Link erstellen
+        </Button>
+      </div>
 
-        {error && (
-          <div className="mb-6 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-            {error}
-          </div>
-        )}
+      {error && (
+        <div className="mb-6 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Einladungslinks</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : links.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <LinkIcon className="h-10 w-10 mb-3" />
-                <p className="text-sm">Noch keine Einladungslinks erstellt</p>
-                <Button
-                  variant="outline"
-                  className="mt-4"
-                  onClick={() => setShowCreateDialog(true)}
-                >
-                  <Plus className="h-4 w-4" />
-                  Ersten Link erstellen
-                </Button>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Bezeichnung</TableHead>
-                      <TableHead>Link</TableHead>
-                      <TableHead className="w-28">Status</TableHead>
-                      <TableHead className="w-28">Erstellt</TableHead>
-                      <TableHead className="w-28">Ablauf</TableHead>
-                      <TableHead className="w-24 text-center">
-                        Einreichungen
-                      </TableHead>
-                      <TableHead className="w-40 text-right">
-                        Aktionen
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {links.map((link) => {
-                      const status = getLinkStatus(link);
-                      const fullUrl = getFullUrl(link.token);
-                      return (
-                        <TableRow key={link.id}>
-                          <TableCell className="font-medium">
-                            {link.label || (
-                              <span className="text-muted-foreground italic">
-                                Kein Name
-                              </span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <code className="text-xs bg-muted px-2 py-1 rounded max-w-[200px] truncate">
-                                /p/{link.token.slice(0, 12)}...
-                              </code>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => handleCopy(fullUrl)}
-                                title="Link kopieren"
-                              >
-                                <Copy className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={status.variant}>
-                              {status.label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {formatDate(link.created_at)}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {link.expires_at
-                              ? formatDate(link.expires_at)
-                              : "-"}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {link.submission_count}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-end gap-1">
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <span>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8"
-                                        onClick={() => openEmailDialog(link)}
-                                        disabled={status.label !== "Aktiv"}
-                                      >
-                                        <Send className="h-4 w-4" />
-                                      </Button>
-                                    </span>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    {status.label === "Aktiv"
-                                      ? "Zugangslink senden"
-                                      : status.label === "Deaktiviert"
-                                        ? "Link ist deaktiviert"
-                                        : "Link ist abgelaufen"}
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Einladungslinks</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : links.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <LinkIcon className="h-10 w-10 mb-3" />
+              <p className="text-sm">Noch keine Einladungslinks erstellt</p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => setShowCreateDialog(true)}
+              >
+                <Plus className="h-4 w-4" />
+                Ersten Link erstellen
+              </Button>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Bezeichnung</TableHead>
+                    <TableHead>Link</TableHead>
+                    <TableHead className="w-28">Status</TableHead>
+                    <TableHead className="w-28">Erstellt</TableHead>
+                    <TableHead className="w-28">Ablauf</TableHead>
+                    <TableHead className="w-24 text-center">
+                      Einreichungen
+                    </TableHead>
+                    <TableHead className="w-40 text-right">Aktionen</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {links.map((link) => {
+                    const status = getLinkStatus(link);
+                    const fullUrl = getFullUrl(link.token);
+                    return (
+                      <TableRow key={link.id}>
+                        <TableCell className="font-medium">
+                          {link.label || (
+                            <span className="text-muted-foreground italic">
+                              Kein Name
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <code className="text-xs bg-muted px-2 py-1 rounded max-w-[200px] truncate">
+                              /p/{link.token.slice(0, 12)}...
+                            </code>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => handleCopy(fullUrl)}
+                              title="Link kopieren"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={status.variant}>{status.label}</Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatDate(link.created_at)}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {link.expires_at ? formatDate(link.expires_at) : "-"}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {link.submission_count}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-end gap-1">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => openEmailDialog(link)}
+                                      disabled={status.label !== "Aktiv"}
+                                    >
+                                      <Send className="h-4 w-4" />
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {status.label === "Aktiv"
+                                    ? "Zugangslink senden"
+                                    : status.label === "Deaktiviert"
+                                      ? "Link ist deaktiviert"
+                                      : "Link ist abgelaufen"}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleToggle(link)}
+                              disabled={togglingId === link.id}
+                              title={
+                                link.is_active ? "Deaktivieren" : "Aktivieren"
+                              }
+                            >
+                              {togglingId === link.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : link.is_active ? (
+                                <ToggleRight className="h-4 w-4 text-green-600" />
+                              ) : (
+                                <ToggleLeft className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </Button>
+                            <Link href={`/dashboard/portal/${link.id}`}>
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8"
-                                onClick={() => handleToggle(link)}
-                                disabled={togglingId === link.id}
-                                title={
-                                  link.is_active ? "Deaktivieren" : "Aktivieren"
-                                }
+                                title="Einreichungen ansehen"
                               >
-                                {togglingId === link.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : link.is_active ? (
-                                  <ToggleRight className="h-4 w-4 text-green-600" />
-                                ) : (
-                                  <ToggleLeft className="h-4 w-4 text-muted-foreground" />
-                                )}
+                                <FolderOpen className="h-4 w-4" />
                               </Button>
-                              <Link href={`/dashboard/portal/${link.id}`}>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  title="Einreichungen ansehen"
-                                >
-                                  <FolderOpen className="h-4 w-4" />
-                                </Button>
-                              </Link>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </main>
+                            </Link>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Create Link Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
