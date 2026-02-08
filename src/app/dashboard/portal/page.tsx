@@ -47,6 +47,7 @@ interface PortalLink {
   token: string;
   label: string;
   is_active: boolean;
+  is_locked: boolean;
   expires_at: string | null;
   created_at: string;
   submission_count: number;
@@ -62,13 +63,16 @@ function formatDate(iso: string): string {
 
 function getLinkStatus(link: PortalLink): {
   label: string;
-  variant: "default" | "secondary" | "destructive";
+  variant: "default" | "secondary" | "destructive" | "outline";
 } {
+  if (link.is_locked) {
+    return { label: "Gesperrt", variant: "destructive" };
+  }
   if (!link.is_active) {
     return { label: "Deaktiviert", variant: "secondary" };
   }
   if (link.expires_at && new Date(link.expires_at) < new Date()) {
-    return { label: "Abgelaufen", variant: "destructive" };
+    return { label: "Abgelaufen", variant: "outline" };
   }
   return { label: "Aktiv", variant: "default" };
 }
@@ -92,8 +96,12 @@ export default function PortalPage() {
   const [isCreating, setIsCreating] = useState(false);
 
   // Created link dialog
-  const [createdLink, setCreatedLink] = useState<string | null>(null);
+  const [createdLink, setCreatedLink] = useState<{
+    url: string;
+    password: string;
+  } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [passwordCopied, setPasswordCopied] = useState(false);
 
   // Toggle loading
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -157,7 +165,10 @@ export default function PortalPage() {
         setShowCreateDialog(false);
         setNewLabel("");
         setNewExpiresAt("");
-        setCreatedLink(getFullUrl(data.link.token));
+        setCreatedLink({
+          url: getFullUrl(data.link.token),
+          password: data.password,
+        });
         await loadLinks();
       } else {
         const data = await res.json();
@@ -480,40 +491,90 @@ export default function PortalPage() {
       <Dialog
         open={createdLink !== null}
         onOpenChange={(open) => {
-          if (!open) setCreatedLink(null);
+          if (!open) {
+            setCreatedLink(null);
+            setPasswordCopied(false);
+          }
         }}
       >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Link erfolgreich erstellt</DialogTitle>
             <DialogDescription>
-              Teilen Sie diesen Link mit Ihrem Mandanten. Ueber diesen Link
-              koennen Dokumente sicher hochgeladen werden.
+              Teilen Sie diesen Link und das Passwort mit Ihrem Mandanten.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <div className="flex items-center gap-2">
-              <Input
-                readOnly
-                value={createdLink || ""}
-                className="font-mono text-sm"
-              />
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => createdLink && handleCopy(createdLink)}
-                title="Link kopieren"
-              >
-                {copied ? (
-                  <Check className="h-4 w-4 text-green-600" />
-                ) : (
-                  <Copy className="h-4 w-4" />
-                )}
-              </Button>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label className="text-sm font-medium mb-1.5 block">Link</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  readOnly
+                  value={createdLink?.url || ""}
+                  className="font-mono text-sm"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => createdLink && handleCopy(createdLink.url)}
+                  title="Link kopieren"
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+            <div>
+              <Label className="text-sm font-medium mb-1.5 block">
+                Passwort
+              </Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  readOnly
+                  value={createdLink?.password || ""}
+                  className="font-mono text-sm tracking-wider"
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={async () => {
+                    if (createdLink) {
+                      try {
+                        await navigator.clipboard.writeText(
+                          createdLink.password,
+                        );
+                        setPasswordCopied(true);
+                        setTimeout(() => setPasswordCopied(false), 2000);
+                      } catch {}
+                    }
+                  }}
+                  title="Passwort kopieren"
+                >
+                  {passwordCopied ? (
+                    <Check className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Speichern Sie das Passwort jetzt — es kann spaeter nicht mehr
+                angezeigt werden.
+              </p>
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={() => setCreatedLink(null)}>Schliessen</Button>
+            <Button
+              onClick={() => {
+                setCreatedLink(null);
+                setPasswordCopied(false);
+              }}
+            >
+              Schliessen
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -547,6 +608,10 @@ export default function PortalPage() {
           ) : (
             <>
               <div className="space-y-4 py-4">
+                <div className="rounded-md bg-blue-50 border border-blue-200 p-3 text-sm text-blue-800">
+                  Beim Senden wird ein neues Passwort fuer diesen Link generiert
+                  und in der E-Mail mitgesendet.
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="recipientEmail">Empfaenger-E-Mail</Label>
                   <Input

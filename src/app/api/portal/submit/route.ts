@@ -1,7 +1,8 @@
 import { createClient } from "@/lib/supabase-server";
-import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase-admin";
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
+import { verifySessionToken } from "@/lib/portal-auth";
 import {
   ALLOWED_MIME_TYPES,
   ALLOWED_EXTENSIONS,
@@ -50,12 +51,7 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
-
-  // Service role client for DB writes (bypasses RLS - we do our own token validation)
-  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const supabaseAdmin = serviceRole
-    ? createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceRole)
-    : null;
+  const supabaseAdmin = createAdminClient();
 
   // Validate token using security-definer function (SEC-1 fix)
   const { data: link, error: linkError } = await supabase
@@ -65,12 +61,21 @@ export async function POST(request: Request) {
       is_active: boolean;
       expires_at: string | null;
       label: string;
+      is_locked: boolean;
+      has_password: boolean;
     }>();
 
   if (linkError || !link) {
     return NextResponse.json(
       { error: "Dieser Link ist ungueltig" },
       { status: 404 },
+    );
+  }
+
+  if (link.is_locked) {
+    return NextResponse.json(
+      { error: "Dieser Zugang wurde gesperrt" },
+      { status: 423 },
     );
   }
 
@@ -86,6 +91,24 @@ export async function POST(request: Request) {
       { error: "Dieser Link ist abgelaufen" },
       { status: 410 },
     );
+  }
+
+  // Session token check (only for links with password)
+  if (link.has_password) {
+    const sessionHeader = request.headers.get("X-Portal-Session");
+    if (!sessionHeader) {
+      return NextResponse.json(
+        { error: "Bitte Passwort eingeben" },
+        { status: 401 },
+      );
+    }
+    const session = verifySessionToken(sessionHeader);
+    if (!session || session.linkId !== link.id) {
+      return NextResponse.json(
+        { error: "Sitzung abgelaufen. Bitte Passwort erneut eingeben." },
+        { status: 401 },
+      );
+    }
   }
 
   // Get files from form data

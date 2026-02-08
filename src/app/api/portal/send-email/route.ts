@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase-server";
+import { createAdminClient } from "@/lib/supabase-admin";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -7,6 +8,7 @@ import {
   buildPortalEmailText,
   buildPortalEmailSubject,
 } from "@/lib/email";
+import { generatePassword, hashPassword } from "@/lib/portal-auth";
 
 const SendEmailSchema = z.object({
   linkId: z.string().uuid(),
@@ -65,6 +67,29 @@ export async function POST(request: Request) {
     );
   }
 
+  // Generate a new password for this link
+  const plainPassword = generatePassword();
+  const { hash, salt } = await hashPassword(plainPassword);
+
+  // Update password in DB (reset failed attempts and lock)
+  const db = createAdminClient() || supabase;
+  const { error: updateError } = await db
+    .from("portal_links")
+    .update({
+      password_hash: hash,
+      password_salt: salt,
+      failed_attempts: 0,
+      is_locked: false,
+    })
+    .eq("id", link.id);
+
+  if (updateError) {
+    return NextResponse.json(
+      { error: "Passwort konnte nicht aktualisiert werden" },
+      { status: 500 },
+    );
+  }
+
   // Build upload URL from ENV to prevent Host header injection
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   const vercelUrl = process.env.VERCEL_URL;
@@ -75,11 +100,12 @@ export async function POST(request: Request) {
     `https://${request.headers.get("host") || "localhost:3000"}`;
   const uploadUrl = `${baseUrl}/p/${link.token}`;
 
-  // Build email
+  // Build email (includes password)
   const emailData = {
     uploadUrl,
     label: link.label || undefined,
     expiresAt: link.expires_at,
+    password: plainPassword,
   };
 
   const subject = buildPortalEmailSubject(link.label || undefined);

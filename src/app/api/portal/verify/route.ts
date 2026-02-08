@@ -23,12 +23,25 @@ export async function GET(request: Request) {
       is_active: boolean;
       expires_at: string | null;
       label: string;
+      is_locked: boolean;
+      has_password: boolean;
     }>();
 
   if (error || !link) {
     return NextResponse.json(
       { valid: false, reason: "Dieser Link ist ungueltig" },
       { status: 404 },
+    );
+  }
+
+  if (link.is_locked) {
+    return NextResponse.json(
+      {
+        valid: false,
+        reason:
+          "Dieser Zugang wurde aus Sicherheitsgruenden gesperrt. Bitte kontaktieren Sie Ihren Ansprechpartner.",
+      },
+      { status: 423 },
     );
   }
 
@@ -49,5 +62,6 @@ export async function GET(request: Request) {
   return NextResponse.json({
     valid: true,
     label: link.label || undefined,
+    passwordRequired: link.has_password,
   });
 }

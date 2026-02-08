@@ -1,7 +1,11 @@
 import { createClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 import { list } from "@vercel/blob";
-import { blobNameFromPathname, formatFileSize, getFileTypeLabel } from "@/lib/files";
+import {
+  blobNameFromPathname,
+  formatFileSize,
+  getFileTypeLabel,
+} from "@/lib/files";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -26,16 +30,15 @@ export async function GET(request: Request) {
   // Verify the link belongs to the authenticated user
   const { data: link, error: linkError } = await supabase
     .from("portal_links")
-    .select("id, token, label, is_active, expires_at, created_at")
+    .select(
+      "id, token, label, is_active, expires_at, created_at, is_locked, failed_attempts, password_hash",
+    )
     .eq("id", linkId)
     .eq("user_id", user.id)
     .single();
 
   if (linkError || !link) {
-    return NextResponse.json(
-      { error: "Link nicht gefunden" },
-      { status: 404 },
-    );
+    return NextResponse.json({ error: "Link nicht gefunden" }, { status: 404 });
   }
 
   // Get all submissions for this link
@@ -88,8 +91,21 @@ export async function GET(request: Request) {
     }),
   );
 
+  // Transform link to include has_password instead of password_hash
+  const linkResponse = {
+    id: link.id,
+    token: link.token,
+    label: link.label,
+    is_active: link.is_active,
+    expires_at: link.expires_at,
+    created_at: link.created_at,
+    is_locked: link.is_locked ?? false,
+    failed_attempts: link.failed_attempts ?? 0,
+    has_password: link.password_hash != null,
+  };
+
   return NextResponse.json({
-    link,
+    link: linkResponse,
     submissions: submissionsWithFiles,
   });
 }

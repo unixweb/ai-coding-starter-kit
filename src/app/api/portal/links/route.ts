@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { z } from "zod";
+import { generatePassword, hashPassword } from "@/lib/portal-auth";
 
 const CreateLinkSchema = z.object({
   label: z.string().max(200).optional().default(""),
@@ -38,6 +39,7 @@ export async function GET() {
     token: link.token,
     label: link.label,
     is_active: link.is_active,
+    is_locked: link.is_locked ?? false,
     expires_at: link.expires_at,
     created_at: link.created_at,
     submission_count: link.portal_submissions?.[0]?.count ?? 0,
@@ -73,6 +75,10 @@ export async function POST(request: Request) {
 
   const token = randomBytes(32).toString("base64url");
 
+  // Generate password for the new link
+  const plainPassword = generatePassword();
+  const { hash, salt } = await hashPassword(plainPassword);
+
   const { data: link, error } = await supabase
     .from("portal_links")
     .insert({
@@ -80,6 +86,8 @@ export async function POST(request: Request) {
       token,
       label: parsed.data.label,
       expires_at: parsed.data.expiresAt || null,
+      password_hash: hash,
+      password_salt: salt,
     })
     .select()
     .single();
@@ -88,7 +96,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ link }, { status: 201 });
+  return NextResponse.json({ link, password: plainPassword }, { status: 201 });
 }
 
 export async function PATCH(request: Request) {
@@ -129,10 +137,7 @@ export async function PATCH(request: Request) {
   }
 
   if (!link) {
-    return NextResponse.json(
-      { error: "Link nicht gefunden" },
-      { status: 404 },
-    );
+    return NextResponse.json({ error: "Link nicht gefunden" }, { status: 404 });
   }
 
   return NextResponse.json({ link });

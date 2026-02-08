@@ -15,6 +15,9 @@ import {
   Copy,
   Check,
   LinkIcon,
+  KeyRound,
+  RefreshCw,
+  ShieldAlert,
 } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
@@ -27,7 +30,16 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface SubmissionFile {
   name: string;
@@ -51,6 +63,9 @@ interface LinkInfo {
   token: string;
   label: string;
   is_active: boolean;
+  is_locked: boolean;
+  failed_attempts: number;
+  has_password: boolean;
   expires_at: string | null;
   created_at: string;
 }
@@ -66,11 +81,14 @@ function formatDate(iso: string): string {
 }
 
 function getLinkStatusBadge(link: LinkInfo) {
+  if (link.is_locked) {
+    return <Badge variant="destructive">Gesperrt</Badge>;
+  }
   if (!link.is_active) {
     return <Badge variant="secondary">Deaktiviert</Badge>;
   }
   if (link.expires_at && new Date(link.expires_at) < new Date()) {
-    return <Badge variant="destructive">Abgelaufen</Badge>;
+    return <Badge variant="outline">Abgelaufen</Badge>;
   }
   return <Badge variant="default">Aktiv</Badge>;
 }
@@ -87,6 +105,13 @@ export default function SubmissionsPage() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Password regeneration state
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [newPassword, setNewPassword] = useState<string | null>(null);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenerateError, setRegenerateError] = useState<string | null>(null);
+  const [passwordCopied, setPasswordCopied] = useState(false);
 
   const loadSubmissions = useCallback(async () => {
     try {
@@ -151,6 +176,34 @@ export default function SubmissionsPage() {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function handleRegeneratePassword() {
+    setIsRegenerating(true);
+    setRegenerateError(null);
+
+    try {
+      const res = await fetch("/api/portal/regenerate-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ linkId }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setNewPassword(data.password);
+        // Refresh link data to update is_locked and failed_attempts
+        await loadSubmissions();
+      } else {
+        setRegenerateError(
+          data.error || "Passwort konnte nicht generiert werden",
+        );
+      }
+    } catch {
+      setRegenerateError("Verbindungsfehler. Bitte versuchen Sie es erneut.");
+    } finally {
+      setIsRegenerating(false);
+    }
   }
 
   async function handleCopyLink() {
@@ -233,6 +286,46 @@ export default function SubmissionsPage() {
                     )}
                   </Button>
                 </div>
+                {/* Password & Security Section */}
+                {link.has_password && (
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-sm">
+                          <KeyRound className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">
+                            Passwortschutz aktiv
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <ShieldAlert className="h-3.5 w-3.5" />
+                            {link.failed_attempts} von 5 Fehlversuchen
+                          </span>
+                          {link.is_locked && (
+                            <Badge variant="destructive" className="text-xs">
+                              Gesperrt
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setShowPasswordDialog(true);
+                          setNewPassword(null);
+                          setRegenerateError(null);
+                          setPasswordCopied(false);
+                        }}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Neues Passwort
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 <p className="mt-3 text-sm text-muted-foreground">
                   {submissions.length} Einreichung
                   {submissions.length !== 1 ? "en" : ""}
@@ -281,8 +374,8 @@ export default function SubmissionsPage() {
                                 </span>
                               </div>
                               <p className="text-xs text-muted-foreground mt-1">
-                                {formatDate(sub.created_at)} ·{" "}
-                                {sub.file_count} Datei
+                                {formatDate(sub.created_at)} · {sub.file_count}{" "}
+                                Datei
                                 {sub.file_count !== 1 ? "en" : ""}
                               </p>
                             </div>
@@ -343,6 +436,109 @@ export default function SubmissionsPage() {
           </>
         ) : null}
       </main>
+
+      {/* Password Regeneration Dialog */}
+      <Dialog
+        open={showPasswordDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowPasswordDialog(false);
+            setNewPassword(null);
+            setRegenerateError(null);
+            setPasswordCopied(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Neues Passwort generieren</DialogTitle>
+            <DialogDescription>
+              {newPassword
+                ? "Das neue Passwort wurde generiert. Fehlversuche und Sperrung wurden zurueckgesetzt."
+                : "Ein neues Passwort wird generiert. Das alte Passwort wird ungueltig. Der Mandant muss das neue Passwort erhalten."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {newPassword ? (
+            <div className="space-y-4 py-4">
+              <div>
+                <Label className="text-sm font-medium mb-1.5 block">
+                  Neues Passwort
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={newPassword}
+                    className="font-mono text-sm tracking-wider"
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(newPassword);
+                        setPasswordCopied(true);
+                        setTimeout(() => setPasswordCopied(false), 2000);
+                      } catch {}
+                    }}
+                    title="Passwort kopieren"
+                  >
+                    {passwordCopied ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Das neue Passwort muss dem Mandanten erneut mitgeteilt werden.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="py-4">
+              {regenerateError && (
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-4">
+                  {regenerateError}
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            {newPassword ? (
+              <Button
+                onClick={() => {
+                  setShowPasswordDialog(false);
+                  setNewPassword(null);
+                  setPasswordCopied(false);
+                }}
+              >
+                Schliessen
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowPasswordDialog(false)}
+                  disabled={isRegenerating}
+                >
+                  Abbrechen
+                </Button>
+                <Button
+                  onClick={handleRegeneratePassword}
+                  disabled={isRegenerating}
+                >
+                  {isRegenerating && (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  )}
+                  Generieren
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

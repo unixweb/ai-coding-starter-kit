@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import {
   Shield,
+  Lock,
   Upload,
   CloudUpload,
   CheckCircle2,
@@ -33,7 +34,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-type PageState = "loading" | "form" | "success" | "error";
+type PageState = "loading" | "password" | "form" | "success" | "error";
 
 export default function PublicUploadPage() {
   const params = useParams();
@@ -41,6 +42,15 @@ export default function PublicUploadPage() {
 
   const [pageState, setPageState] = useState<PageState>("loading");
   const [errorMessage, setErrorMessage] = useState("");
+
+  // Password state
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [passwordValue, setPasswordValue] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [remainingAttempts, setRemainingAttempts] = useState<number | null>(
+    null,
+  );
+  const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
 
   // Form state
   const [name, setName] = useState("");
@@ -65,7 +75,11 @@ export default function PublicUploadPage() {
       const data = await res.json();
 
       if (data.valid) {
-        setPageState("form");
+        if (data.passwordRequired) {
+          setPageState("password");
+        } else {
+          setPageState("form");
+        }
       } else {
         setErrorMessage(data.reason || "Dieser Link ist ungueltig");
         setPageState("error");
@@ -116,6 +130,40 @@ export default function PublicUploadPage() {
     }
   }
 
+  async function handlePasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!passwordValue.trim()) return;
+
+    setIsVerifyingPassword(true);
+    setPasswordError(null);
+
+    try {
+      const res = await fetch("/api/portal/verify-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, password: passwordValue }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setSessionToken(data.sessionToken);
+        setPageState("form");
+      } else if (data.locked) {
+        setErrorMessage(data.error || "Zugang gesperrt");
+        setPageState("error");
+      } else {
+        setPasswordError(data.error || "Falsches Passwort");
+        if (data.remainingAttempts !== undefined) {
+          setRemainingAttempts(data.remainingAttempts);
+        }
+      }
+    } catch {
+      setPasswordError("Verbindungsfehler. Bitte versuchen Sie es erneut.");
+    } finally {
+      setIsVerifyingPassword(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
@@ -149,8 +197,14 @@ export default function PublicUploadPage() {
     try {
       setUploadProgress(30);
 
+      const headers: Record<string, string> = {};
+      if (sessionToken) {
+        headers["X-Portal-Session"] = sessionToken;
+      }
+
       const res = await fetch("/api/portal/submit", {
         method: "POST",
+        headers,
         body: formData,
       });
 
@@ -196,6 +250,76 @@ export default function PublicUploadPage() {
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
           </div>
+        )}
+
+        {/* Password State */}
+        {pageState === "password" && (
+          <>
+            <div className="text-center mb-8">
+              <Lock className="h-10 w-10 text-blue-600 mx-auto mb-4" />
+              <h1 className="text-2xl font-bold tracking-tight">
+                Passwort eingeben
+              </h1>
+              <p className="mt-2 text-muted-foreground">
+                Bitte geben Sie das Passwort ein, das Sie erhalten haben.
+              </p>
+            </div>
+
+            <Card className="mx-auto max-w-md">
+              <CardContent className="pt-6">
+                <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Passwort</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="Passwort eingeben"
+                      value={passwordValue}
+                      onChange={(e) => {
+                        setPasswordValue(e.target.value);
+                        if (passwordError) setPasswordError(null);
+                      }}
+                      disabled={isVerifyingPassword}
+                      autoFocus
+                    />
+                  </div>
+
+                  {passwordError && (
+                    <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                      {passwordError}
+                      {remainingAttempts !== null && remainingAttempts > 0 && (
+                        <span className="block mt-1 font-medium">
+                          Noch {remainingAttempts}{" "}
+                          {remainingAttempts === 1 ? "Versuch" : "Versuche"}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={isVerifyingPassword || !passwordValue.trim()}
+                  >
+                    {isVerifyingPassword ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Wird geprueft...
+                      </>
+                    ) : (
+                      "Weiter"
+                    )}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <div className="mt-6 text-center">
+              <p className="text-xs text-muted-foreground">
+                Passwort nicht erhalten? Kontaktieren Sie Ihren Ansprechpartner.
+              </p>
+            </div>
+          </>
         )}
 
         {/* Error State */}
