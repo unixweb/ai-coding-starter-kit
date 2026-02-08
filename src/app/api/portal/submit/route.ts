@@ -112,7 +112,10 @@ export async function POST(request: Request) {
 
   if (submissionError || !submission) {
     return NextResponse.json(
-      { error: "Einreichung konnte nicht erstellt werden" },
+      {
+        error: "Einreichung konnte nicht erstellt werden",
+        _debug: submissionError,
+      },
       { status: 500 },
     );
   }
