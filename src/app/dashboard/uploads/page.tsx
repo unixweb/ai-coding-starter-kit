@@ -150,7 +150,7 @@ const statusConfig: Record<
   },
 };
 
-// Status Badge Component
+// Status Badge Component - zeigt nur aktuellen Status, Dropdown zum Ändern
 function StatusBadges({
   currentStatus,
   onStatusChange,
@@ -161,44 +161,33 @@ function StatusBadges({
   disabled?: boolean;
 }) {
   const statuses: FileStatus[] = ["new", "in_progress", "done", "archived"];
+  const config = statusConfig[currentStatus];
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild disabled={disabled}>
-        <div className="flex gap-1 cursor-pointer">
-          {statuses.map((status) => {
-            const config = statusConfig[status];
-            const isActive = currentStatus === status;
-            return (
-              <span
-                key={status}
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${
-                  isActive
-                    ? `${config.bgClass} text-white`
-                    : `border ${config.borderClass} ${config.textClass} bg-transparent`
-                }`}
-              >
-                {config.label}
-              </span>
-            );
-          })}
-        </div>
+        <span
+          className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity ${config.bgClass} text-white`}
+        >
+          {config.label}
+        </span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
         {statuses.map((status) => {
-          const config = statusConfig[status];
+          const statusConf = statusConfig[status];
+          const isCurrentStatus = status === currentStatus;
           return (
             <DropdownMenuItem
               key={status}
               onClick={() => onStatusChange(status)}
-              className="cursor-pointer"
+              className={`cursor-pointer ${isCurrentStatus ? "bg-muted" : ""}`}
             >
               <span
-                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium mr-2 ${config.bgClass} text-white`}
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium mr-2 ${statusConf.bgClass} text-white`}
               >
-                {config.label}
+                {statusConf.label}
               </span>
-              Status aendern
+              {isCurrentStatus && <span className="text-muted-foreground text-xs">(aktuell)</span>}
             </DropdownMenuItem>
           );
         })}
