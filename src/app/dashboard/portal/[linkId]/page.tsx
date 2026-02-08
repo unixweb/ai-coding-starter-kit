@@ -3,42 +3,12 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import {
-  ArrowLeft,
-  Download,
-  Loader2,
-  Mail,
-  User,
-  FileText,
-  ChevronDown,
-  ChevronRight,
-  Copy,
-  Check,
-  LinkIcon,
-  KeyRound,
-  RefreshCw,
-  ShieldAlert,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { PortalSettings } from "./portal-settings";
+import { PortalFileList, type FlatFile } from "./portal-file-list";
+import { PortalLinkCard } from "./portal-link-card";
+import { PortalStatsCard } from "./portal-stats-card";
 
 interface SubmissionFile {
   name: string;
@@ -61,6 +31,7 @@ interface LinkInfo {
   id: string;
   token: string;
   label: string;
+  description: string;
   is_active: boolean;
   is_locked: boolean;
   failed_attempts: number;
@@ -69,48 +40,49 @@ interface LinkInfo {
   created_at: string;
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("de-DE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function getLinkStatusBadge(link: LinkInfo) {
-  if (link.is_locked) {
-    return <Badge variant="destructive">Gesperrt</Badge>;
-  }
-  if (!link.is_active) {
-    return <Badge variant="secondary">Deaktiviert</Badge>;
-  }
-  if (link.expires_at && new Date(link.expires_at) < new Date()) {
+function getStatusBadge(link: LinkInfo) {
+  if (link.is_locked) return <Badge variant="destructive">Gesperrt</Badge>;
+  if (!link.is_active) return <Badge variant="secondary">Deaktiviert</Badge>;
+  if (link.expires_at && new Date(link.expires_at) < new Date())
     return <Badge variant="outline">Abgelaufen</Badge>;
-  }
-  return <Badge variant="default">Aktiv</Badge>;
+  return (
+    <Badge className="bg-green-600 hover:bg-green-600 text-white">Aktiv</Badge>
+  );
 }
 
-export default function SubmissionsPage() {
+/** Flatten submissions into a flat file list, sorted by date (newest first) */
+function flattenFiles(submissions: Submission[]): FlatFile[] {
+  const files: FlatFile[] = [];
+  for (const sub of submissions) {
+    for (const file of sub.files) {
+      files.push({
+        submissionId: sub.id,
+        submitterName: sub.name,
+        filename: file.name,
+        size: file.size,
+        sizeFormatted: file.sizeFormatted,
+        uploadedAt: sub.created_at,
+        key: `${sub.id}/${file.name}`,
+      });
+    }
+  }
+  files.sort(
+    (a, b) =>
+      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
+  );
+  return files;
+}
+
+export default function PortalDetailPage() {
   const params = useParams();
   const linkId = params.linkId as string;
 
   const [link, setLink] = useState<LinkInfo | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Password regeneration state
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
-  const [newPassword, setNewPassword] = useState<string | null>(null);
-  const [isRegenerating, setIsRegenerating] = useState(false);
-  const [regenerateError, setRegenerateError] = useState<string | null>(null);
-  const [passwordCopied, setPasswordCopied] = useState(false);
-
-  const loadSubmissions = useCallback(async () => {
+  const loadData = useCallback(async () => {
     try {
       const res = await fetch(
         `/api/portal/submissions?linkId=${encodeURIComponent(linkId)}`,
@@ -119,8 +91,9 @@ export default function SubmissionsPage() {
         const data = await res.json();
         setLink(data.link);
         setSubmissions(data.submissions);
+        setError(null);
       } else {
-        setError("Einreichungen konnten nicht geladen werden");
+        setError("Daten konnten nicht geladen werden");
       }
     } catch {
       setError("Verbindungsfehler");
@@ -130,79 +103,39 @@ export default function SubmissionsPage() {
   }, [linkId]);
 
   useEffect(() => {
-    loadSubmissions();
-  }, [loadSubmissions]);
+    loadData();
+  }, [loadData]);
 
-  function toggleExpanded(id: string) {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }
+  const flatFiles = flattenFiles(submissions);
 
-  async function handleDownload(submissionId: string, filename: string) {
-    const res = await fetch(
-      `/api/portal/download?submissionId=${encodeURIComponent(submissionId)}&filename=${encodeURIComponent(filename)}`,
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
     );
-    if (!res.ok) {
-      return;
-    }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
-  async function handleRegeneratePassword() {
-    setIsRegenerating(true);
-    setRegenerateError(null);
-
-    try {
-      const res = await fetch("/api/portal/regenerate-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ linkId }),
-      });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setNewPassword(data.password);
-        // Refresh link data to update is_locked and failed_attempts
-        await loadSubmissions();
-      } else {
-        setRegenerateError(
-          data.error || "Passwort konnte nicht generiert werden",
-        );
-      }
-    } catch {
-      setRegenerateError("Verbindungsfehler. Bitte versuchen Sie es erneut.");
-    } finally {
-      setIsRegenerating(false);
-    }
-  }
-
-  async function handleCopyLink() {
-    if (!link) return;
-    const fullUrl = `${window.location.origin}/p/${link.token}`;
-    try {
-      await navigator.clipboard.writeText(fullUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // fallback
-    }
+  if (error || !link) {
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <Link
+          href="/dashboard/portal"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Zurueck zur Uebersicht
+        </Link>
+        <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">
+          {error || "Portal nicht gefunden"}
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      {/* Back link */}
       <Link
         href="/dashboard/portal"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
@@ -211,306 +144,50 @@ export default function SubmissionsPage() {
         Zurueck zur Uebersicht
       </Link>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      {/* Page title */}
+      <div className="flex items-center gap-3 mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">
+          {link.label || "Portal"}
+        </h1>
+        {getStatusBadge(link)}
+      </div>
+
+      {/* Two-column grid */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Left column (main area) */}
+        <div className="lg:col-span-2 space-y-6">
+          <PortalSettings
+            linkId={link.id}
+            label={link.label}
+            description={link.description}
+            isActive={link.is_active}
+            hasPassword={link.has_password}
+            onSaved={loadData}
+          />
+
+          <PortalFileList
+            files={flatFiles}
+            linkId={link.id}
+            onFilesChanged={loadData}
+          />
         </div>
-      ) : error ? (
-        <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">
-          {error}
+
+        {/* Right column (sidebar) */}
+        <div className="space-y-6">
+          <PortalLinkCard
+            token={link.token}
+            isActive={link.is_active}
+            linkId={link.id}
+          />
+
+          <PortalStatsCard
+            isActive={link.is_active}
+            isLocked={link.is_locked}
+            totalFiles={flatFiles.length}
+            createdAt={link.created_at}
+          />
         </div>
-      ) : link ? (
-        <>
-          {/* Link Info Card */}
-          <Card className="mb-8">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-xl">
-                    {link.label || "Einladungslink"}
-                  </CardTitle>
-                  <CardDescription>
-                    Erstellt am {formatDate(link.created_at)}
-                    {link.expires_at &&
-                      ` · Ablauf: ${formatDate(link.expires_at)}`}
-                  </CardDescription>
-                </div>
-                {getLinkStatusBadge(link)}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                <Input
-                  readOnly
-                  value={`${typeof window !== "undefined" ? window.location.origin : ""}/p/${link.token}`}
-                  className="font-mono text-sm"
-                />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleCopyLink}
-                  title="Link kopieren"
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <Copy className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-              {/* Password & Security Section */}
-              {link.has_password && (
-                <div className="mt-4 pt-4 border-t">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm">
-                        <KeyRound className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">
-                          Passwortschutz aktiv
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <ShieldAlert className="h-3.5 w-3.5" />
-                          {link.failed_attempts} von 5 Fehlversuchen
-                        </span>
-                        {link.is_locked && (
-                          <Badge variant="destructive" className="text-xs">
-                            Gesperrt
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setShowPasswordDialog(true);
-                        setNewPassword(null);
-                        setRegenerateError(null);
-                        setPasswordCopied(false);
-                      }}
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" />
-                      Neues Passwort
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              <p className="mt-3 text-sm text-muted-foreground">
-                {submissions.length} Einreichung
-                {submissions.length !== 1 ? "en" : ""}
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Submissions */}
-          <h2 className="text-lg font-semibold mb-4">Einreichungen</h2>
-
-          {submissions.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <FileText className="h-10 w-10 mb-3" />
-                <p className="text-sm">
-                  Noch keine Einreichungen fuer diesen Link
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-3">
-              {submissions.map((sub) => {
-                const isExpanded = expandedIds.has(sub.id);
-                return (
-                  <Card key={sub.id}>
-                    <CardHeader
-                      className="cursor-pointer"
-                      onClick={() => toggleExpanded(sub.id)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          {isExpanded ? (
-                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                          )}
-                          <div>
-                            <div className="flex items-center gap-3">
-                              <span className="flex items-center gap-1.5 font-medium">
-                                <User className="h-4 w-4 text-muted-foreground" />
-                                {sub.name}
-                              </span>
-                              <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                                <Mail className="h-3.5 w-3.5" />
-                                {sub.email}
-                              </span>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {formatDate(sub.created_at)} · {sub.file_count}{" "}
-                              Datei
-                              {sub.file_count !== 1 ? "en" : ""}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </CardHeader>
-
-                    {isExpanded && (
-                      <CardContent>
-                        {sub.note && (
-                          <div className="mb-4 rounded-md bg-muted p-3">
-                            <p className="text-xs font-medium text-muted-foreground mb-1">
-                              Notiz
-                            </p>
-                            <p className="text-sm">{sub.note}</p>
-                          </div>
-                        )}
-
-                        <Separator className="mb-4" />
-
-                        <p className="text-sm font-medium mb-3">Dateien</p>
-                        <div className="space-y-2">
-                          {sub.files.map((file) => (
-                            <div
-                              key={file.name}
-                              className="flex items-center justify-between rounded-md border px-3 py-2"
-                            >
-                              <div className="flex items-center gap-2">
-                                <FileText className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm truncate max-w-xs">
-                                  {file.name}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  {file.sizeFormatted}
-                                </span>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() =>
-                                  handleDownload(sub.id, file.name)
-                                }
-                                title="Herunterladen"
-                              >
-                                <Download className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    )}
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </>
-      ) : null}
-
-      {/* Password Regeneration Dialog */}
-      <Dialog
-        open={showPasswordDialog}
-        onOpenChange={(open) => {
-          if (!open) {
-            setShowPasswordDialog(false);
-            setNewPassword(null);
-            setRegenerateError(null);
-            setPasswordCopied(false);
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Neues Passwort generieren</DialogTitle>
-            <DialogDescription>
-              {newPassword
-                ? "Das neue Passwort wurde generiert. Fehlversuche und Sperrung wurden zurueckgesetzt."
-                : "Ein neues Passwort wird generiert. Das alte Passwort wird ungueltig. Der Mandant muss das neue Passwort erhalten."}
-            </DialogDescription>
-          </DialogHeader>
-
-          {newPassword ? (
-            <div className="space-y-4 py-4">
-              <div>
-                <Label className="text-sm font-medium mb-1.5 block">
-                  Neues Passwort
-                </Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    readOnly
-                    value={newPassword}
-                    className="font-mono text-sm tracking-wider"
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard.writeText(newPassword);
-                        setPasswordCopied(true);
-                        setTimeout(() => setPasswordCopied(false), 2000);
-                      } catch {}
-                    }}
-                    title="Passwort kopieren"
-                  >
-                    {passwordCopied ? (
-                      <Check className="h-4 w-4 text-green-600" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  Das neue Passwort muss dem Mandanten erneut mitgeteilt werden.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="py-4">
-              {regenerateError && (
-                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive mb-4">
-                  {regenerateError}
-                </div>
-              )}
-            </div>
-          )}
-
-          <DialogFooter>
-            {newPassword ? (
-              <Button
-                onClick={() => {
-                  setShowPasswordDialog(false);
-                  setNewPassword(null);
-                  setPasswordCopied(false);
-                }}
-              >
-                Schliessen
-              </Button>
-            ) : (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowPasswordDialog(false)}
-                  disabled={isRegenerating}
-                >
-                  Abbrechen
-                </Button>
-                <Button
-                  onClick={handleRegeneratePassword}
-                  disabled={isRegenerating}
-                >
-                  {isRegenerating && (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  )}
-                  Generieren
-                </Button>
-              </>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </div>
     </div>
   );
 }

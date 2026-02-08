@@ -1,8 +1,10 @@
 import { createClient } from "@/lib/supabase-server";
+import { createAdminClient } from "@/lib/supabase-admin";
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { generatePassword, hashPassword } from "@/lib/portal-auth";
+import { del, list } from "@vercel/blob";
 
 const CreateLinkSchema = z.object({
   label: z.string().max(200).optional().default(""),
@@ -11,7 +13,12 @@ const CreateLinkSchema = z.object({
 
 const UpdateLinkSchema = z.object({
   id: z.string().uuid(),
-  is_active: z.boolean(),
+  label: z.string().min(1, "Name darf nicht leer sein").max(200).optional(),
+  description: z.string().max(500).optional(),
+  is_active: z.boolean().optional(),
+  password: z
+    .union([z.string().min(8, "Mindestens 8 Zeichen"), z.literal("")])
+    .optional(),
 });
 
 export async function GET() {
@@ -124,9 +131,35 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const { data: link, error } = await supabase
+  // Build update object with only provided fields
+  const updateData: Record<string, unknown> = {};
+  if (parsed.data.label !== undefined) updateData.label = parsed.data.label;
+  if (parsed.data.description !== undefined)
+    updateData.description = parsed.data.description;
+  if (parsed.data.is_active !== undefined)
+    updateData.is_active = parsed.data.is_active;
+
+  // Handle password: non-empty string = set new password, empty string = no change
+  if (parsed.data.password && parsed.data.password.length > 0) {
+    const { hash, salt } = await hashPassword(parsed.data.password);
+    updateData.password_hash = hash;
+    updateData.password_salt = salt;
+    updateData.failed_attempts = 0;
+    updateData.is_locked = false;
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return NextResponse.json({ error: "Keine Aenderungen" }, { status: 400 });
+  }
+
+  // Use admin client if password is being set (to bypass RLS for password columns)
+  const client = updateData.password_hash
+    ? createAdminClient() || supabase
+    : supabase;
+
+  const { data: link, error } = await client
     .from("portal_links")
-    .update({ is_active: parsed.data.is_active })
+    .update(updateData)
     .eq("id", parsed.data.id)
     .eq("user_id", user.id)
     .select()
@@ -141,4 +174,65 @@ export async function PATCH(request: Request) {
   }
 
   return NextResponse.json({ link });
+}
+
+export async function DELETE(request: Request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user || !user.email_confirmed_at) {
+    return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+
+  if (!id) {
+    return NextResponse.json({ error: "id Parameter fehlt" }, { status: 400 });
+  }
+
+  // Verify ownership
+  const { data: link, error: linkError } = await supabase
+    .from("portal_links")
+    .select("id, user_id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (linkError || !link) {
+    return NextResponse.json({ error: "Link nicht gefunden" }, { status: 404 });
+  }
+
+  // Delete all blob files under portal/{linkId}/
+  try {
+    const prefix = `portal/${link.id}/`;
+    let cursor: string | undefined;
+    do {
+      const result = await list({ prefix, cursor });
+      if (result.blobs.length > 0) {
+        await del(result.blobs.map((b) => b.url));
+      }
+      cursor = result.hasMore ? result.cursor : undefined;
+    } while (cursor);
+  } catch {
+    // Continue even if blob cleanup fails
+  }
+
+  // Delete portal link (submissions cascade via DB)
+  const admin = createAdminClient();
+  const client = admin || supabase;
+
+  const { error: deleteError } = await client
+    .from("portal_links")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (deleteError) {
+    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
 }
