@@ -111,8 +111,12 @@ export async function POST(request: Request) {
     .single();
 
   if (submissionError || !submission) {
+    console.error("Submission insert error:", JSON.stringify(submissionError));
     return NextResponse.json(
-      { error: "Einreichung konnte nicht erstellt werden" },
+      {
+        error: "Einreichung konnte nicht erstellt werden",
+        details: submissionError?.message || "Unbekannter Fehler",
+      },
       { status: 500 },
     );
   }
