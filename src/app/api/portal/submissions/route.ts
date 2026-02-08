@@ -31,7 +31,7 @@ export async function GET(request: Request) {
   const { data: link, error: linkError } = await supabase
     .from("portal_links")
     .select(
-      "id, token, label, description, is_active, expires_at, created_at, is_locked, failed_attempts, password_hash",
+      "id, token, label, description, is_active, expires_at, created_at, is_locked, failed_attempts, password_hash, client_email",
     )
     .eq("id", linkId)
     .eq("user_id", user.id)
@@ -103,6 +103,7 @@ export async function GET(request: Request) {
     is_locked: link.is_locked ?? false,
     failed_attempts: link.failed_attempts ?? 0,
     has_password: link.password_hash != null,
+    client_email: link.client_email ?? null,
   };
 
   return NextResponse.json({
