@@ -7,8 +7,15 @@ export async function GET() {
 
     // Step 1: Test RPC
     const { data: link, error: rpcError } = await supabase
-      .rpc("verify_portal_token", { lookup_token: "YnwnVj8l4tA8Ql1i_3Jx8ycg6e7ddkmgR4QSIgdla_s" })
-      .single();
+      .rpc("verify_portal_token", {
+        lookup_token: "YnwnVj8l4tA8Ql1i_3Jx8ycg6e7ddkmgR4QSIgdla_s",
+      })
+      .single<{
+        id: string;
+        is_active: boolean;
+        expires_at: string | null;
+        label: string;
+      }>();
 
     if (rpcError) {
       return NextResponse.json({ step: "rpc", error: rpcError });
