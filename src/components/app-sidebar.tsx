@@ -19,7 +19,7 @@ import {
 const navItems = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { title: "Portale", href: "/dashboard/portal", icon: FolderOpen },
-  { title: "Uploads", href: "/dashboard/files", icon: Upload },
+  { title: "Uploads", href: "/dashboard/uploads", icon: Upload },
 ];
 
 export function AppSidebar() {
