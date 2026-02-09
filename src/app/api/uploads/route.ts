@@ -327,7 +327,7 @@ export async function DELETE(request: Request) {
   // Get file status records to verify ownership and get file URLs
   const { data: fileStatuses, error: statusError } = await supabase
     .from("portal_file_status")
-    .select("id, file_url, link_id, submission_id, portal_links!inner(user_id)")
+    .select("id, file_url, link_id, submission_id")
     .in("id", fileIds);
 
   if (statusError) {
@@ -338,10 +338,19 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Keine Dateien gefunden" }, { status: 404 });
   }
 
+  // Get portal links to verify ownership
+  const linkIds = [...new Set(fileStatuses.map((f) => f.link_id))];
+  const { data: links } = await supabase
+    .from("portal_links")
+    .select("id, user_id")
+    .in("id", linkIds);
+
+  const linkOwnerMap = new Map((links || []).map((l) => [l.id, l.user_id]));
+
   // Verify all files belong to the user or their owner (for team members)
   const unauthorizedFiles = fileStatuses.filter((f) => {
-    const linkData = f.portal_links as unknown as { user_id: string };
-    return linkData.user_id !== ownerId;
+    const linkOwnerId = linkOwnerMap.get(f.link_id);
+    return linkOwnerId !== ownerId;
   });
 
   if (unauthorizedFiles.length > 0) {
