@@ -36,6 +36,15 @@ export async function PATCH(request: Request) {
 
   const { fileIds, status } = parsed.data;
 
+  // Check if user is a team member to determine the owner
+  const { data: membership } = await supabase
+    .from("team_members")
+    .select("owner_id")
+    .eq("member_id", user.id)
+    .single();
+
+  const ownerId = membership?.owner_id || user.id;
+
   // Get file status records to verify ownership
   const { data: fileStatuses, error: statusError } = await supabase
     .from("portal_file_status")
@@ -50,10 +59,10 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Keine Dateien gefunden" }, { status: 404 });
   }
 
-  // Verify all files belong to the user
+  // Verify all files belong to the user or their owner (for team members)
   const unauthorizedFiles = fileStatuses.filter((f) => {
     const linkData = f.portal_links as unknown as { user_id: string };
-    return linkData.user_id !== user.id;
+    return linkData.user_id !== ownerId;
   });
 
   if (unauthorizedFiles.length > 0) {

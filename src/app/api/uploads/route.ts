@@ -72,11 +72,20 @@ export async function GET(request: Request) {
 
   const { tab, search, portalId, timeRange, page, limit } = parsed.data;
 
-  // Get all portal links for the user
+  // Check if user is a team member to determine the owner
+  const { data: membership } = await supabase
+    .from("team_members")
+    .select("owner_id")
+    .eq("member_id", user.id)
+    .single();
+
+  const ownerId = membership?.owner_id || user.id;
+
+  // Get all portal links for the user (or their owner if team member)
   const { data: links, error: linksError } = await supabase
     .from("portal_links")
     .select("id, label")
-    .eq("user_id", user.id);
+    .eq("user_id", ownerId);
 
   if (linksError) {
     return NextResponse.json({ error: linksError.message }, { status: 500 });
@@ -289,6 +298,15 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
+  // Check if user is a team member to determine the owner
+  const { data: membership } = await supabase
+    .from("team_members")
+    .select("owner_id")
+    .eq("member_id", user.id)
+    .single();
+
+  const ownerId = membership?.owner_id || user.id;
+
   let body: unknown;
   try {
     body = await request.json();
@@ -320,10 +338,10 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Keine Dateien gefunden" }, { status: 404 });
   }
 
-  // Verify all files belong to the user
+  // Verify all files belong to the user or their owner (for team members)
   const unauthorizedFiles = fileStatuses.filter((f) => {
     const linkData = f.portal_links as unknown as { user_id: string };
-    return linkData.user_id !== user.id;
+    return linkData.user_id !== ownerId;
   });
 
   if (unauthorizedFiles.length > 0) {
