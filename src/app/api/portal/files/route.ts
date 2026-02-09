@@ -33,10 +33,19 @@ export async function DELETE(request: Request) {
     );
   }
 
+  // Check if user is a team member to determine the owner
+  const { data: membership } = await supabase
+    .from("team_members")
+    .select("owner_id")
+    .eq("member_id", user.id)
+    .single();
+
+  const ownerId = membership?.owner_id || user.id;
+
   // Verify ownership: submission -> link -> user
   const { data: submission, error: subError } = await supabase
     .from("portal_submissions")
-    .select("id, link_id, file_count, portal_links!inner(id, user_id)")
+    .select("id, link_id, file_count")
     .eq("id", submissionId)
     .single();
 
@@ -47,17 +56,20 @@ export async function DELETE(request: Request) {
     );
   }
 
-  const linkData = submission.portal_links as unknown as {
-    id: string;
-    user_id: string;
-  };
-  if (linkData.user_id !== user.id) {
+  // Verify link ownership
+  const { data: link } = await supabase
+    .from("portal_links")
+    .select("id, user_id")
+    .eq("id", submission.link_id)
+    .single();
+
+  if (!link || link.user_id !== ownerId) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 403 });
   }
 
   // Delete file from blob storage
   const safeName = sanitizeFilename(filename);
-  const blobPath = `portal/${linkData.id}/${submission.id}/${safeName}`;
+  const blobPath = `portal/${link.id}/${submission.id}/${safeName}`;
 
   try {
     // Find the blob URL by listing with prefix
