@@ -39,19 +39,10 @@ export async function GET() {
     );
   }
 
-  // Get all team members with their profile data
+  // Get all team members
   const { data: teamMembers, error: membersError } = await supabase
     .from("team_members")
-    .select(`
-      id,
-      member_id,
-      created_at,
-      profiles!team_members_member_id_fkey (
-        id,
-        name,
-        email
-      )
-    `)
+    .select("id, member_id, created_at")
     .eq("owner_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -60,6 +51,25 @@ export async function GET() {
     return NextResponse.json(
       { error: "Team-Mitglieder konnten nicht geladen werden" },
       { status: 500 }
+    );
+  }
+
+  // Fetch profiles for all team members
+  const memberIds = (teamMembers || []).map((tm) => tm.member_id);
+  let memberProfiles: Record<string, { name: string; email: string }> = {};
+
+  if (memberIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, name, email")
+      .in("id", memberIds);
+
+    memberProfiles = (profiles || []).reduce(
+      (acc, p) => {
+        acc[p.id] = { name: p.name || "", email: p.email || "" };
+        return acc;
+      },
+      {} as Record<string, { name: string; email: string }>
     );
   }
 
@@ -81,13 +91,12 @@ export async function GET() {
 
   // Transform data for response
   const members = (teamMembers || []).map((tm) => {
-    // Supabase returns the joined data as an object (not array) when using foreign key reference
-    const memberProfile = tm.profiles as unknown as { id: string; name: string; email: string } | null;
+    const profile = memberProfiles[tm.member_id];
     return {
       id: tm.id,
       memberId: tm.member_id,
-      email: memberProfile?.email || "",
-      name: memberProfile?.name || "",
+      email: profile?.email || "",
+      name: profile?.name || "",
       status: "active" as const,
       createdAt: tm.created_at,
     };
