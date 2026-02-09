@@ -27,14 +27,23 @@ export async function GET(request: Request) {
     );
   }
 
-  // Verify the link belongs to the authenticated user
+  // Check if user is a team member to determine the owner
+  const { data: membership } = await supabase
+    .from("team_members")
+    .select("owner_id")
+    .eq("member_id", user.id)
+    .single();
+
+  const ownerId = membership?.owner_id || user.id;
+
+  // Verify the link belongs to the user or their owner (for team members)
   const { data: link, error: linkError } = await supabase
     .from("portal_links")
     .select(
       "id, token, label, description, is_active, expires_at, created_at, is_locked, failed_attempts, password_hash, client_email",
     )
     .eq("id", linkId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (linkError || !link) {

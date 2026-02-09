@@ -35,10 +35,21 @@ export async function GET() {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  // RLS automatically handles team access - members see their owner's portals
+  // Get user's own portal links, or portal links of owner (if user is a team member)
+  // First check if user is a team member
+  const { data: membership } = await supabase
+    .from("team_members")
+    .select("owner_id")
+    .eq("member_id", user.id)
+    .single();
+
+  // Query portal links for owner (self or team owner)
+  const ownerId = membership?.owner_id || user.id;
+
   const { data: links, error } = await supabase
     .from("portal_links")
     .select("*, portal_submissions(count)")
+    .eq("user_id", ownerId)
     .order("created_at", { ascending: false });
 
   if (error) {
