@@ -191,6 +191,15 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Keine Aenderungen" }, { status: 400 });
   }
 
+  // Check if user is a team member to determine the owner
+  const { data: membershipPatch } = await supabase
+    .from("team_members")
+    .select("owner_id")
+    .eq("member_id", user.id)
+    .single();
+
+  const ownerIdPatch = membershipPatch?.owner_id || user.id;
+
   // Use admin client if password is being set (to bypass RLS for password columns)
   const client = updateData.password_hash
     ? createAdminClient() || supabase
@@ -200,7 +209,7 @@ export async function PATCH(request: Request) {
     .from("portal_links")
     .update(updateData)
     .eq("id", parsed.data.id)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerIdPatch)
     .select()
     .single();
 

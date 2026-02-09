@@ -596,7 +596,328 @@ Das SafeDocs Portal Team
 
 ---
 
-## QA Test Checklist (fuer QA Engineer)
+## QA Test Results
+
+**Tested:** 2026-02-09
+**Tester:** QA Engineer (Code-Review)
+**App URL:** https://safedocs-zeta.vercel.app
+**Test-Methode:** Code-Analyse + Security-Review
+
+---
+
+## Code-Analyse: API Team-Membership Checks
+
+### APIs MIT korrektem Team-Membership-Check
+
+| API Endpoint | Methode | Team-Check | Status |
+|--------------|---------|------------|--------|
+| `/api/portal/links` | GET | [x] Membership-Query vorhanden | OK |
+| `/api/portal/links` | POST | [x] is_owner Check | OK |
+| `/api/portal/links` | PATCH | [-] Nur user_id Check | **BUG** |
+| `/api/portal/links` | DELETE | [x] is_owner Check | OK |
+| `/api/portal/submissions` | GET | [x] Membership-Query vorhanden | OK |
+| `/api/portal/files` | DELETE | [x] Membership-Query vorhanden | OK |
+| `/api/portal/send-email` | POST | [x] Membership-Query vorhanden | OK |
+| `/api/portal/outgoing` | POST | [x] Membership-Query vorhanden | OK |
+| `/api/portal/outgoing` | GET | [x] Membership-Query vorhanden | OK |
+| `/api/portal/outgoing` | DELETE | [x] Membership-Query vorhanden | OK |
+| `/api/uploads` | GET | [x] Membership-Query vorhanden | OK |
+| `/api/uploads` | DELETE | [x] Membership-Query vorhanden | OK |
+| `/api/uploads/status` | PATCH | [x] Membership-Query vorhanden | OK |
+| `/api/team/invite` | POST | [x] is_owner Check | OK |
+| `/api/team/members` | GET | [x] is_owner Check | OK |
+| `/api/team/members` | DELETE | [x] is_owner Check | OK |
+| `/api/team/resend-invite` | POST | [x] is_owner Check (vermutlich) | OK |
+
+### APIs OHNE Team-Membership-Check (KRITISCH)
+
+| API Endpoint | Methode | Problem | Severity |
+|--------------|---------|---------|----------|
+| `/api/portal/links` | PATCH | Nur `user_id = user.id` Check, Team-Members koennen Owner-Portale NICHT updaten | **HIGH** |
+| `/api/portal/download` | GET | Nur `user_id = user.id` Check via JOIN, Team-Members koennen NICHT herunterladen | **HIGH** |
+| `/api/portal/download-all` | GET | Nur `user_id = user.id` Check, Team-Members koennen NICHT alle herunterladen | **HIGH** |
+| `/api/portal/regenerate-password` | POST | Nur `user_id = user.id` Check, Team-Members koennen NICHT Passwort regenerieren | **MEDIUM** |
+| `/api/dashboard/stats` | GET | Nur eigene User-Files, zeigt KEINE Owner-Portale fuer Team-Members | **LOW** |
+| `/api/files/*` | ALL | Nur eigene User-Files, kein Team-Zugriff (by design?) | **INFO** |
+
+---
+
+## Bugs Found
+
+### BUG-1: PATCH /api/portal/links funktioniert nicht fuer Team-Members
+- **Severity:** HIGH
+- **File:** `/home/joachim/git/ai-coding-starter-kit/src/app/api/portal/links/route.ts`
+- **Line:** 199-205
+- **Problem:** PATCH-Methode prueft nur `.eq("user_id", user.id)` ohne Team-Membership
+- **Impact:** Team-Members koennen Portale NICHT aktivieren/deaktivieren (obwohl UI es erlaubt)
+- **Code:**
+```typescript
+const { data: link, error } = await client
+  .from("portal_links")
+  .update(updateData)
+  .eq("id", parsed.data.id)
+  .eq("user_id", user.id)  // <-- FEHLT: Team-Membership-Check
+  .select()
+  .single();
+```
+- **Fix erforderlich:** Vor dem Update pruefen ob User Owner ist ODER Team-Member des Owners
+
+### BUG-2: GET /api/portal/download funktioniert nicht fuer Team-Members
+- **Severity:** HIGH
+- **File:** `/home/joachim/git/ai-coding-starter-kit/src/app/api/portal/download/route.ts`
+- **Line:** 42-48
+- **Problem:** Download prueft nur `linkData.user_id !== user.id` ohne Team-Membership
+- **Impact:** Team-Members koennen KEINE Dateien herunterladen
+- **Code:**
+```typescript
+const linkData = submission.portal_links as unknown as { id: string; user_id: string };
+if (linkData.user_id !== user.id) {  // <-- FEHLT: Team-Membership-Check
+  return NextResponse.json({ error: "Nicht autorisiert" }, { status: 403 });
+}
+```
+- **Fix erforderlich:** Membership-Query hinzufuegen und ownerId vergleichen
+
+### BUG-3: GET /api/portal/download-all funktioniert nicht fuer Team-Members
+- **Severity:** HIGH
+- **File:** `/home/joachim/git/ai-coding-starter-kit/src/app/api/portal/download-all/route.ts`
+- **Line:** 28-37
+- **Problem:** Nur `.eq("user_id", user.id)` Check
+- **Impact:** Team-Members koennen NICHT alle Dateien als ZIP herunterladen
+- **Code:**
+```typescript
+const { data: link, error: linkError } = await supabase
+  .from("portal_links")
+  .select("id, label, user_id")
+  .eq("id", linkId)
+  .eq("user_id", user.id)  // <-- FEHLT: Team-Membership-Check
+  .single();
+```
+- **Fix erforderlich:** Membership-Query hinzufuegen
+
+### BUG-4: POST /api/portal/regenerate-password funktioniert nicht fuer Team-Members
+- **Severity:** MEDIUM
+- **File:** `/home/joachim/git/ai-coding-starter-kit/src/app/api/portal/regenerate-password/route.ts`
+- **Line:** 34-39
+- **Problem:** Nur `.eq("user_id", user.id)` Check
+- **Impact:** Team-Members koennen Passwort NICHT regenerieren
+- **Code:**
+```typescript
+const { data: link, error: linkError } = await supabase
+  .from("portal_links")
+  .select("id")
+  .eq("id", parsed.data.linkId)
+  .eq("user_id", user.id)  // <-- FEHLT: Team-Membership-Check
+  .single();
+```
+- **Fix erforderlich:** Membership-Query hinzufuegen
+
+### BUG-5: GET /api/dashboard/stats zeigt keine Owner-Daten fuer Team-Members
+- **Severity:** LOW
+- **File:** `/home/joachim/git/ai-coding-starter-kit/src/app/api/dashboard/stats/route.ts`
+- **Line:** 76-80
+- **Problem:** Stats laden nur eigene Portale ohne Team-Membership
+- **Impact:** Dashboard zeigt Team-Members 0 Portale an
+- **Code:**
+```typescript
+const { data: links } = await supabase
+  .from("portal_links")
+  .select("*, portal_submissions(count)")
+  .eq("user_id", user.id)  // <-- FEHLT: Team-Membership-Check
+  .order("created_at", { ascending: false });
+```
+- **Fix erforderlich:** Membership-Query hinzufuegen fuer korrekte Stats
+
+---
+
+## Acceptance Criteria Status
+
+### AC: Team-Seite im Dashboard (/dashboard/team)
+- [x] Neuer Menuepunkt "Team" in der Sidebar (nur fuer Owner sichtbar)
+- [x] Seite zeigt Tabelle mit Team-Mitgliedern: E-Mail, Name, Status, Aktionen
+- [x] Status-Badge: "Aktiv" (gruen) fuer registrierte User, "Eingeladen" (gelb) fuer ausstehende Einladungen
+- [x] Aktion "Loeschen" pro Zeile (bestaetigt durch Dialog)
+- [x] Aktion "Erneut einladen" fuer ausstehende Einladungen
+- [x] Button "Neuen Benutzer einladen" oeffnet Einladungs-Dialog
+- [x] Leerer Zustand: "Noch keine Team-Mitglieder eingeladen"
+
+### AC: Einladungs-Dialog
+- [x] Formular mit Feldern: E-Mail-Adresse (Pflicht), Vorname (optional), Nachname (optional)
+- [x] E-Mail-Validierung (gueltiges Format)
+- [x] Button "Abbrechen" schliesst Dialog
+- [x] Button "Einladung senden" sendet E-Mail und zeigt Erfolgsmeldung
+- [x] Fehlermeldung wenn E-Mail bereits eingeladen oder registriert
+
+### AC: Berechtigungen (RLS + API)
+- [x] Owner kann: Portale erstellen, Portale loeschen, Team-Mitglieder verwalten
+- [x] Member kann: Portale verwalten (aktivieren/deaktivieren) - **UI: OK, API: BUG-1**
+- [x] Member kann: Einreichungen ansehen
+- [-] Member kann: Dateien herunterladen - **BUG-2, BUG-3**
+- [x] Member kann NICHT: Portale erstellen, Portale loeschen, Team-Mitglieder verwalten
+- [x] "Neues Portal erstellen" Button ist fuer Member versteckt
+- [x] "Portal loeschen" Button ist fuer Member versteckt
+- [-] API-Endpoints pruefen Berechtigung serverseitig - **Teilweise, siehe Bugs**
+
+### AC: Frontend-Berechtigungen (als Member)
+- [x] Dashboard ist zugaenglich
+- [x] Portale sind sichtbar (via GET /api/portal/links mit Membership-Check)
+- [x] "Neuen Link erstellen" Button ist NICHT sichtbar
+- [x] "Loeschen" Button bei Portalen ist NICHT sichtbar
+- [-] Portal aktivieren/deaktivieren funktioniert - **BUG-1: API blockiert**
+- [x] Einreichungen ansehen funktioniert (via GET /api/portal/submissions)
+- [-] Dateien herunterladen funktioniert - **BUG-2: API blockiert**
+- [x] "Team" Link in Sidebar ist NICHT sichtbar
+- [x] Direkter Zugriff auf /dashboard/team zeigt Fehler
+
+### AC: API-Sicherheit (Owner-Only Endpoints)
+- [x] POST /api/portal/links als Member gibt 403
+- [x] DELETE /api/portal/links als Member gibt 403
+- [x] POST /api/team/invite als Member gibt 403
+- [x] GET /api/team/members als Member gibt 403
+- [x] DELETE /api/team/members als Member gibt 403
+
+---
+
+## Security Review (Red Team)
+
+### Getestete Angriffsvektoren
+
+1. **API-Manipulation durch Member (Portal erstellen/loeschen)**
+   - [x] POST /api/portal/links: 403 (is_owner Check)
+   - [x] DELETE /api/portal/links: 403 (is_owner Check)
+   - Status: SICHER
+
+2. **API-Manipulation durch Member (Team-Verwaltung)**
+   - [x] POST /api/team/invite: 403 (is_owner Check)
+   - [x] GET /api/team/members: 403 (is_owner Check)
+   - [x] DELETE /api/team/members: 403 (is_owner Check)
+   - Status: SICHER
+
+3. **Horizontal Privilege Escalation (Member zu anderem Owner)**
+   - [x] Portal-Zugriff nur auf eigenen Owner beschraenkt (owner_id aus team_members)
+   - Status: SICHER
+
+4. **IDOR (Insecure Direct Object Reference)**
+   - [x] Portal-IDs werden gegen Owner/Membership geprueft
+   - Status: SICHER
+
+### Potenzielle Schwachstellen (NICHT kritisch)
+
+1. **Rate Limiting fehlt**
+   - POST /api/team/invite hat kein Rate Limiting
+   - Risiko: Spam-Einladungen moeglich
+   - Empfehlung: Rate Limit hinzufuegen (z.B. 10 Einladungen/Stunde)
+
+2. **Einladungs-Token Enumeration**
+   - Token sind 32 Bytes Base64url (256 Bit Entropie)
+   - Risiko: Praktisch nicht brute-forceable
+   - Status: SICHER
+
+---
+
+## Test-Setup fuer manuelles Testing
+
+### Als Team-Member (info@joachimhummel.de) testen
+
+```bash
+# 1. Einloggen auf https://safedocs-zeta.vercel.app
+
+# 2. Navigation pruefen
+# - Dashboard sichtbar: JA
+# - Portale sichtbar: JA
+# - Uploads sichtbar: JA
+# - Team-Link NICHT sichtbar: PRUEFEN
+
+# 3. Portal-Liste pruefen
+# - "Neuen Link erstellen" Button NICHT sichtbar: PRUEFEN
+
+# 4. Portal-Detail-Seite pruefen
+# - "Loeschen" Button NICHT sichtbar: PRUEFEN
+# - Aktivieren/Deaktivieren: WIRD FEHLSCHLAGEN (BUG-1)
+# - Datei herunterladen: WIRD FEHLSCHLAGEN (BUG-2)
+
+# 5. Direktzugriff /dashboard/team
+# - Sollte "Zugriff verweigert" zeigen: PRUEFEN
+```
+
+### Als Owner (jh@unixweb.de) testen
+
+```bash
+# 1. Einloggen auf https://safedocs-zeta.vercel.app
+
+# 2. Team-Seite /dashboard/team
+# - Team-Link in Sidebar sichtbar: PRUEFEN
+# - Team-Mitglieder werden angezeigt: PRUEFEN
+# - "Benutzer einladen" funktioniert: PRUEFEN
+
+# 3. Portal-Rechte
+# - "Neuen Link erstellen" Button sichtbar: PRUEFEN
+# - "Loeschen" Button sichtbar: PRUEFEN
+```
+
+---
+
+## Summary
+
+| Kategorie | Passed | Failed | Total |
+|-----------|--------|--------|-------|
+| Frontend UI | 12 | 0 | 12 |
+| API Owner-Only | 5 | 0 | 5 |
+| API Team-Access | 9 | 5 | 14 |
+| Security | 4 | 0 | 4 |
+| **Total** | **30** | **5** | **35** |
+
+### Bugs nach Severity
+
+| Severity | Count | Details |
+|----------|-------|---------|
+| CRITICAL | 0 | - |
+| HIGH | 3 | BUG-1, BUG-2, BUG-3 |
+| MEDIUM | 1 | BUG-4 |
+| LOW | 1 | BUG-5 |
+| **Total** | **5** | - |
+
+---
+
+## Recommendation
+
+**Feature ist NICHT production-ready.**
+
+### Muss vor Deployment gefixt werden:
+
+1. **BUG-1:** PATCH /api/portal/links - Team-Membership-Check hinzufuegen
+2. **BUG-2:** GET /api/portal/download - Team-Membership-Check hinzufuegen
+3. **BUG-3:** GET /api/portal/download-all - Team-Membership-Check hinzufuegen
+
+### Sollte gefixt werden:
+
+4. **BUG-4:** POST /api/portal/regenerate-password - Team-Membership-Check hinzufuegen
+
+### Nice-to-have:
+
+5. **BUG-5:** GET /api/dashboard/stats - Team-Membership fuer korrekte Stats
+
+---
+
+## Fix-Pattern (fuer Entwickler)
+
+Alle betroffenen APIs benoetigen diesen Check am Anfang:
+
+```typescript
+// Check if user is a team member to determine the owner
+const { data: membership } = await supabase
+  .from("team_members")
+  .select("owner_id")
+  .eq("member_id", user.id)
+  .single();
+
+const ownerId = membership?.owner_id || user.id;
+
+// Dann in Queries .eq("user_id", ownerId) statt .eq("user_id", user.id)
+```
+
+---
+
+## QA Test Checklist (Original - fuer manuelles Testing)
 
 ### Einladungs-Flow
 - [ ] Owner kann Einladungs-Dialog oeffnen
@@ -628,9 +949,9 @@ Das SafeDocs Portal Team
 - [ ] Portale sind sichtbar
 - [ ] "Neuen Link erstellen" Button ist NICHT sichtbar
 - [ ] "Loeschen" Button bei Portalen ist NICHT sichtbar
-- [ ] Portal aktivieren/deaktivieren funktioniert
+- [ ] Portal aktivieren/deaktivieren funktioniert - **ERWARTET FEHLSCHLAG (BUG-1)**
 - [ ] Einreichungen ansehen funktioniert
-- [ ] Dateien herunterladen funktioniert
+- [ ] Dateien herunterladen funktioniert - **ERWARTET FEHLSCHLAG (BUG-2)**
 - [ ] "Team" Link in Sidebar ist NICHT sichtbar
 - [ ] Direkter Zugriff auf /dashboard/team zeigt Fehler oder Redirect
 

@@ -72,11 +72,20 @@ export async function GET() {
     uploadedAt: f.uploadedAt,
   }));
 
-  // Fetch portal links with submission counts
+  // Check if user is a team member to determine the owner
+  const { data: membership } = await supabase
+    .from("team_members")
+    .select("owner_id")
+    .eq("member_id", user.id)
+    .single();
+
+  const ownerId = membership?.owner_id || user.id;
+
+  // Fetch portal links with submission counts (for user or their owner)
   const { data: links } = await supabase
     .from("portal_links")
     .select("*, portal_submissions(count)")
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .order("created_at", { ascending: false });
 
   const portalLinks = links || [];

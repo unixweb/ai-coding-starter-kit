@@ -23,10 +23,19 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Verify the submission belongs to a link owned by the authenticated user
+  // Check if user is a team member to determine the owner
+  const { data: membership } = await supabase
+    .from("team_members")
+    .select("owner_id")
+    .eq("member_id", user.id)
+    .single();
+
+  const ownerId = membership?.owner_id || user.id;
+
+  // Verify the submission belongs to a link owned by the user or their owner
   const { data: submission, error: subError } = await supabase
     .from("portal_submissions")
-    .select("id, link_id, portal_links!inner(id, user_id)")
+    .select("id, link_id")
     .eq("id", submissionId)
     .single();
 
@@ -37,10 +46,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // RLS already ensures user can only see their own submissions,
-  // but double-check ownership
-  const linkData = submission.portal_links as unknown as { id: string; user_id: string };
-  if (linkData.user_id !== user.id) {
+  // Verify link ownership
+  const { data: link } = await supabase
+    .from("portal_links")
+    .select("id, user_id")
+    .eq("id", submission.link_id)
+    .single();
+
+  if (!link || link.user_id !== ownerId) {
     return NextResponse.json(
       { error: "Nicht autorisiert" },
       { status: 403 },

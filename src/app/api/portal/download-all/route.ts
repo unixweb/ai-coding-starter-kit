@@ -24,12 +24,21 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Verify ownership
+  // Check if user is a team member to determine the owner
+  const { data: membership } = await supabase
+    .from("team_members")
+    .select("owner_id")
+    .eq("member_id", user.id)
+    .single();
+
+  const ownerId = membership?.owner_id || user.id;
+
+  // Verify ownership (or team membership)
   const { data: link, error: linkError } = await supabase
     .from("portal_links")
     .select("id, label, user_id")
     .eq("id", linkId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (linkError || !link) {
