@@ -1,8 +1,9 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FolderOpen, Upload } from "lucide-react";
+import { LayoutDashboard, FolderOpen, Upload, Users } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -22,8 +23,28 @@ const navItems = [
   { title: "Uploads", href: "/dashboard/uploads", icon: Upload },
 ];
 
+const teamNavItems = [
+  { title: "Team-Benutzer", href: "/dashboard/team", icon: Users },
+];
+
 export function AppSidebar() {
   const pathname = usePathname();
+  const [isOwner, setIsOwner] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    async function loadUserRole() {
+      try {
+        const res = await fetch("/api/user/role");
+        if (res.ok) {
+          const data = await res.json();
+          setIsOwner(data.isOwner);
+        }
+      } catch {
+        // Silently fail - don't show team link if we can't determine role
+      }
+    }
+    loadUserRole();
+  }, []);
 
   return (
     <Sidebar>
@@ -57,6 +78,29 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {isOwner && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Team</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {teamNavItems.map((item) => {
+                  const isActive = pathname?.startsWith(item.href);
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton asChild isActive={!!isActive}>
+                        <Link href={item.href}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter className="border-t px-4 py-3">
         <p className="text-xs text-muted-foreground">SafeDocs Portal</p>

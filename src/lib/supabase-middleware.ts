@@ -57,6 +57,10 @@ export async function updateSession(request: NextRequest) {
     "/api/portal/verify-password",
     "/api/portal/outgoing/download",
     "/api/portal/outgoing/list",
+    // PROJ-18: Team invitation routes (public)
+    "/invite/",
+    "/api/team/verify-invite",
+    "/api/team/accept-invite",
   ];
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route),

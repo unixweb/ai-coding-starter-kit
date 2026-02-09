@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
+import { useUserRole } from "@/hooks/use-user-role";
 import { Badge } from "@/components/ui/badge";
 import { PortalSettings } from "./portal-settings";
 import { PortalFileList, type FlatFile } from "./portal-file-list";
@@ -81,6 +82,7 @@ function flattenFiles(submissions: Submission[]): FlatFile[] {
 export default function PortalDetailPage() {
   const params = useParams();
   const linkId = params.linkId as string;
+  const { isOwner } = useUserRole();
 
   const [link, setLink] = useState<LinkInfo | null>(null);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -176,6 +178,7 @@ export default function PortalDetailPage() {
             isActive={link.is_active}
             hasPassword={link.has_password}
             clientEmail={link.client_email}
+            isOwner={isOwner ?? false}
             onSaved={loadData}
           />
 

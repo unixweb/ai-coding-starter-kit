@@ -35,10 +35,10 @@ export async function GET() {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
+  // RLS automatically handles team access - members see their owner's portals
   const { data: links, error } = await supabase
     .from("portal_links")
     .select("*, portal_submissions(count)")
-    .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -67,6 +67,24 @@ export async function POST(request: Request) {
 
   if (!user || !user.email_confirmed_at) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
+  }
+
+  // PROJ-18: Only owners can create portal links
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("is_owner")
+    .eq("id", user.id)
+    .single();
+
+  if (profileError || !profile) {
+    return NextResponse.json({ error: "Profil nicht gefunden" }, { status: 404 });
+  }
+
+  if (!profile.is_owner) {
+    return NextResponse.json(
+      { error: "Nur Inhaber koennen Portal-Links erstellen" },
+      { status: 403 }
+    );
   }
 
   let body: unknown;
@@ -196,6 +214,24 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
+  // PROJ-18: Only owners can delete portal links
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("is_owner")
+    .eq("id", user.id)
+    .single();
+
+  if (profileError || !profile) {
+    return NextResponse.json({ error: "Profil nicht gefunden" }, { status: 404 });
+  }
+
+  if (!profile.is_owner) {
+    return NextResponse.json(
+      { error: "Nur Inhaber koennen Portal-Links loeschen" },
+      { status: 403 }
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
 
@@ -203,7 +239,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "id Parameter fehlt" }, { status: 400 });
   }
 
-  // Verify ownership
+  // Verify ownership (owners can only delete their own links)
   const { data: link, error: linkError } = await supabase
     .from("portal_links")
     .select("id, user_id")

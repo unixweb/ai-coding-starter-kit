@@ -12,6 +12,7 @@ import {
   LinkIcon,
   Send,
 } from "lucide-react";
+import { useUserRole } from "@/hooks/use-user-role";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -81,6 +82,7 @@ function getFullUrl(token: string): string {
 }
 
 export default function PortalPage() {
+  const { isOwner } = useUserRole();
   const [links, setLinks] = useState<PortalLink[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -264,10 +266,12 @@ export default function PortalPage() {
             Einladungslinks erstellen und Einreichungen verwalten
           </p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)}>
-          <Plus className="h-4 w-4" />
-          Neuen Link erstellen
-        </Button>
+        {isOwner && (
+          <Button onClick={() => setShowCreateDialog(true)}>
+            <Plus className="h-4 w-4" />
+            Neuen Link erstellen
+          </Button>
+        )}
       </div>
 
       {error && (
@@ -289,14 +293,16 @@ export default function PortalPage() {
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <LinkIcon className="h-10 w-10 mb-3" />
               <p className="text-sm">Noch keine Einladungslinks erstellt</p>
-              <Button
-                variant="outline"
-                className="mt-4"
-                onClick={() => setShowCreateDialog(true)}
-              >
-                <Plus className="h-4 w-4" />
-                Ersten Link erstellen
-              </Button>
+              {isOwner && (
+                <Button
+                  variant="outline"
+                  className="mt-4"
+                  onClick={() => setShowCreateDialog(true)}
+                >
+                  <Plus className="h-4 w-4" />
+                  Ersten Link erstellen
+                </Button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">

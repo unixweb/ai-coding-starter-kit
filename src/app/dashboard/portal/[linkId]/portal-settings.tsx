@@ -35,6 +35,7 @@ interface PortalSettingsProps {
   isActive: boolean;
   hasPassword: boolean;
   clientEmail?: string | null;
+  isOwner: boolean;
   onSaved: () => void;
 }
 
@@ -45,6 +46,7 @@ export function PortalSettings({
   isActive: initialIsActive,
   hasPassword,
   clientEmail: initialClientEmail,
+  isOwner,
   onSaved,
 }: PortalSettingsProps) {
   const router = useRouter();
@@ -213,37 +215,39 @@ export function PortalSettings({
             Speichern
           </Button>
 
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" disabled={isDeleting}>
-                {isDeleting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-                Loeschen
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Portal loeschen?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Das Portal wird unwiderruflich geloescht. Alle Einreichungen
-                  und Dateien werden entfernt. Diese Aktion kann nicht
-                  rueckgaengig gemacht werden.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Abbrechen</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDelete}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  Endgueltig loeschen
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {isOwner && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" disabled={isDeleting}>
+                  {isDeleting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Loeschen
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Portal loeschen?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Das Portal wird unwiderruflich geloescht. Alle Einreichungen
+                    und Dateien werden entfernt. Diese Aktion kann nicht
+                    rueckgaengig gemacht werden.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDelete}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Endgueltig loeschen
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </CardContent>
     </Card>
