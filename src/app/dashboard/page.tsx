@@ -110,7 +110,7 @@ export default function DashboardPage() {
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {/* Uploads heute */}
-            <Card className="border-l-4 border-l-blue-500">
+            <Card className="border-l-4 border-l-blue-500 bg-blue-50">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
                   <div>
@@ -120,7 +120,7 @@ export default function DashboardPage() {
                     <p className="text-3xl font-bold mt-1">
                       {stats.uploadsToday}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-blue-600/70 mt-1">
                       +{stats.uploadsThisWeek} diese Woche
                     </p>
                   </div>
@@ -130,7 +130,7 @@ export default function DashboardPage() {
             </Card>
 
             {/* Aktive Portale */}
-            <Card className="border-l-4 border-l-green-500">
+            <Card className="border-l-4 border-l-green-500 bg-green-50">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
                   <div>
@@ -140,7 +140,7 @@ export default function DashboardPage() {
                     <p className="text-3xl font-bold mt-1">
                       {stats.activePortals}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-green-600/70 mt-1">
                       {stats.inactivePortals} inaktiv
                     </p>
                   </div>
@@ -150,7 +150,7 @@ export default function DashboardPage() {
             </Card>
 
             {/* Uploads gesamt */}
-            <Card className="border-l-4 border-l-purple-500">
+            <Card className="border-l-4 border-l-purple-500 bg-purple-50">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
                   <div>
@@ -160,7 +160,7 @@ export default function DashboardPage() {
                     <p className="text-3xl font-bold mt-1">
                       {stats.totalUploads}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-purple-600/70 mt-1">
                       Dateien hochgeladen
                     </p>
                   </div>
@@ -170,7 +170,7 @@ export default function DashboardPage() {
             </Card>
 
             {/* Letzte Aktivitaet */}
-            <Card className="border-l-4 border-l-orange-500">
+            <Card className="border-l-4 border-l-orange-500 bg-orange-50">
               <CardContent className="p-5">
                 <div className="flex items-center justify-between">
                   <div>
@@ -182,7 +182,7 @@ export default function DashboardPage() {
                         ? formatDate(stats.lastActivity)
                         : "—"}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-orange-600/70 mt-1">
                       Letzter Upload
                     </p>
                   </div>
