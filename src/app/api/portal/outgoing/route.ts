@@ -65,12 +65,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: firstError }, { status: 400 });
   }
 
-  // Verify the link belongs to the authenticated user
+  // Check if user is a team member to determine the owner
+  const { data: membership } = await supabase
+    .from("team_members")
+    .select("owner_id")
+    .eq("member_id", user.id)
+    .single();
+
+  const ownerId = membership?.owner_id || user.id;
+
+  // Verify the link belongs to the user or their owner (for team members)
   const { data: link, error: linkError } = await supabase
     .from("portal_links")
     .select("id, token, label, client_email, is_active, expires_at")
     .eq("id", parsed.data.linkId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerId)
     .single();
 
   if (linkError || !link) {
@@ -267,12 +276,21 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Verify the link belongs to the authenticated user
+  // Check if user is a team member to determine the owner
+  const { data: membershipGet } = await supabase
+    .from("team_members")
+    .select("owner_id")
+    .eq("member_id", user.id)
+    .single();
+
+  const ownerIdGet = membershipGet?.owner_id || user.id;
+
+  // Verify the link belongs to the user or their owner (for team members)
   const { data: link, error: linkError } = await supabase
     .from("portal_links")
     .select("id")
     .eq("id", linkId)
-    .eq("user_id", user.id)
+    .eq("user_id", ownerIdGet)
     .single();
 
   if (linkError || !link) {
@@ -323,10 +341,19 @@ export async function DELETE(request: NextRequest) {
     );
   }
 
-  // Fetch the file and verify ownership through the link
+  // Check if user is a team member to determine the owner
+  const { data: membershipDel } = await supabase
+    .from("team_members")
+    .select("owner_id")
+    .eq("member_id", user.id)
+    .single();
+
+  const ownerIdDel = membershipDel?.owner_id || user.id;
+
+  // Fetch the file
   const { data: file, error: fileError } = await supabase
     .from("portal_outgoing_files")
-    .select("id, blob_url, link_id, portal_links!inner(id, user_id)")
+    .select("id, blob_url, link_id")
     .eq("id", fileId)
     .single();
 
@@ -334,10 +361,14 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Datei nicht gefunden" }, { status: 404 });
   }
 
-  // RLS already ensures user can only see their own files,
-  // but double-check ownership
-  const linkData = file.portal_links as unknown as { id: string; user_id: string };
-  if (linkData.user_id !== user.id) {
+  // Verify ownership through the link
+  const { data: linkForDelete } = await supabase
+    .from("portal_links")
+    .select("id, user_id")
+    .eq("id", file.link_id)
+    .single();
+
+  if (!linkForDelete || linkForDelete.user_id !== ownerIdDel) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 403 });
   }
 
