@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Users,
@@ -12,6 +12,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTeamMembers, type TeamMember } from "@/hooks/use-team-members";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -50,41 +51,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-interface TeamMember {
-  id: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  status: "active" | "invited";
-  created_at: string;
-  invitation_id?: string;
-}
-
-interface ApiMember {
-  id: string;
-  memberId: string;
-  email: string;
-  name: string;
-  status: "active";
-  createdAt: string;
-}
-
-interface ApiInvitation {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  name: string;
-  status: "pending";
-  expiresAt: string;
-  createdAt: string;
-}
-
 export default function TeamPage() {
   const router = useRouter();
-  const [members, setMembers] = useState<TeamMember[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isOwner, setIsOwner] = useState<boolean | null>(null);
+  const { members, isLoading, isNotOwner, refresh, deleteMember } = useTeamMembers();
 
   // Invite dialog state
   const [showInviteDialog, setShowInviteDialog] = useState(false);
@@ -100,50 +69,6 @@ export default function TeamPage() {
 
   // Resend invite state
   const [resendingId, setResendingId] = useState<string | null>(null);
-
-  const loadMembers = useCallback(async () => {
-    try {
-      const res = await fetch("/api/team/members");
-      if (res.status === 403) {
-        setIsOwner(false);
-        return;
-      }
-      if (res.ok) {
-        const data = await res.json();
-        // Transform API response to unified format
-        const activeMembers: TeamMember[] = (data.members || []).map((m: ApiMember) => {
-          const nameParts = m.name.split(" ");
-          return {
-            id: m.id,
-            email: m.email,
-            first_name: nameParts[0] || "",
-            last_name: nameParts.slice(1).join(" ") || "",
-            status: "active" as const,
-            created_at: m.createdAt,
-          };
-        });
-        const invitedMembers: TeamMember[] = (data.invitations || []).map((inv: ApiInvitation) => ({
-          id: inv.id,
-          email: inv.email,
-          first_name: inv.firstName || "",
-          last_name: inv.lastName || "",
-          status: "invited" as const,
-          created_at: inv.createdAt,
-          invitation_id: inv.id,
-        }));
-        setMembers([...activeMembers, ...invitedMembers]);
-        setIsOwner(true);
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadMembers();
-  }, [loadMembers]);
 
   async function handleInvite() {
     const emailTrimmed = inviteEmail.trim().toLowerCase();
@@ -176,7 +101,7 @@ export default function TeamPage() {
         setInviteEmail("");
         setInviteFirstName("");
         setInviteLastName("");
-        await loadMembers();
+        await refresh();
       } else {
         const data = await res.json();
         setInviteError(data.error || "Einladung konnte nicht gesendet werden");
@@ -192,35 +117,20 @@ export default function TeamPage() {
     if (!deleteTarget) return;
 
     setIsDeleting(true);
-    try {
-      const body =
+    const success = await deleteMember(deleteTarget);
+
+    if (success) {
+      toast.success(
         deleteTarget.status === "invited"
-          ? { invitationId: deleteTarget.invitation_id }
-          : { memberId: deleteTarget.id };
-
-      const res = await fetch("/api/team/members", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (res.ok) {
-        toast.success(
-          deleteTarget.status === "invited"
-            ? "Einladung geloescht"
-            : "Benutzer entfernt"
-        );
-        setDeleteTarget(null);
-        await loadMembers();
-      } else {
-        const data = await res.json();
-        toast.error(data.error || "Loeschen fehlgeschlagen");
-      }
-    } catch {
-      toast.error("Verbindungsfehler");
-    } finally {
-      setIsDeleting(false);
+          ? "Einladung geloescht"
+          : "Benutzer entfernt"
+      );
+      setDeleteTarget(null);
+    } else {
+      toast.error("Loeschen fehlgeschlagen");
     }
+
+    setIsDeleting(false);
   }
 
   async function handleResendInvite(member: TeamMember) {
@@ -254,8 +164,8 @@ export default function TeamPage() {
     return name || "-";
   }
 
-  // Loading state
-  if (isLoading) {
+  // Loading state (only show spinner on first load)
+  if (isLoading && members.length === 0 && !isNotOwner) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex items-center justify-center py-12">
@@ -266,7 +176,7 @@ export default function TeamPage() {
   }
 
   // Not authorized (not owner)
-  if (isOwner === false) {
+  if (isNotOwner) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <Card>
