@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import {
   Plus,
@@ -13,6 +13,7 @@ import {
   Send,
 } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
+import { usePortalLinks, type PortalLink } from "@/hooks/use-portal-links";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -40,17 +41,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-interface PortalLink {
-  id: string;
-  token: string;
-  label: string;
-  is_active: boolean;
-  is_locked: boolean;
-  expires_at: string | null;
-  created_at: string;
-  submission_count: number;
-}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("de-DE", {
@@ -83,8 +73,7 @@ function getFullUrl(token: string): string {
 
 export default function PortalPage() {
   const { isOwner } = useUserRole();
-  const [links, setLinks] = useState<PortalLink[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { links, isLoading, refresh, toggleLink } = usePortalLinks();
   const [error, setError] = useState<string | null>(null);
 
   // Create dialog
@@ -111,24 +100,6 @@ export default function PortalPage() {
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendSuccess, setSendSuccess] = useState(false);
-
-  const loadLinks = useCallback(async () => {
-    try {
-      const res = await fetch("/api/portal/links");
-      if (res.ok) {
-        const data = await res.json();
-        setLinks(data.links);
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadLinks();
-  }, [loadLinks]);
 
   async function handleCreate() {
     setIsCreating(true);
@@ -169,7 +140,7 @@ export default function PortalPage() {
           url: getFullUrl(data.link.token),
           password: data.password,
         });
-        await loadLinks();
+        await refresh();
       } else {
         const data = await res.json();
         setError(data.error || "Link konnte nicht erstellt werden");
@@ -183,20 +154,8 @@ export default function PortalPage() {
 
   async function handleToggle(link: PortalLink) {
     setTogglingId(link.id);
-    try {
-      const res = await fetch("/api/portal/links", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: link.id, is_active: !link.is_active }),
-      });
-      if (res.ok) {
-        await loadLinks();
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setTogglingId(null);
-    }
+    await toggleLink(link);
+    setTogglingId(null);
   }
 
   async function handleCopy(text: string) {
@@ -285,7 +244,7 @@ export default function PortalPage() {
           <CardTitle className="text-lg">Einladungslinks</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {isLoading && links.length === 0 ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>

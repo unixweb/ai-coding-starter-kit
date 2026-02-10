@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   Upload,
@@ -20,24 +19,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
-interface DashboardStats {
-  userName: string;
-  uploadsToday: number;
-  uploadsThisWeek: number;
-  activePortals: number;
-  inactivePortals: number;
-  totalUploads: number;
-  totalSubmissions: number;
-  lastActivity: string | null;
-  recentFiles: { name: string; size: string; uploadedAt: string }[];
-  activePortalLinks: {
-    id: string;
-    label: string;
-    submission_count: number;
-    is_active: boolean;
-  }[];
-}
+import { useDashboardStats } from "@/hooks/use-dashboard-stats";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("de-DE", {
@@ -56,29 +38,7 @@ function formatDateLong(): string {
 }
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  const loadStats = useCallback(async () => {
-    try {
-      const res = await fetch("/api/dashboard/stats");
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      } else {
-        setError(true);
-      }
-    } catch {
-      setError(true);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadStats();
-  }, [loadStats]);
+  const { stats, isLoading, isError } = useDashboardStats();
 
   const userName = stats?.userName ?? "";
   const firstName = userName.split(" ")[0] || userName.split("@")[0] || "";
@@ -97,11 +57,11 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      {isLoading ? (
+      {isLoading && !stats ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : error ? (
+      ) : isError && !stats ? (
         <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">
           Dashboard-Daten konnten nicht geladen werden. Bitte versuchen Sie es
           spaeter erneut.

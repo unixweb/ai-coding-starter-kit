@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Download,
@@ -14,6 +14,7 @@ import {
   Archive,
   Upload,
 } from "lucide-react";
+import { useUploads, type FileStatus, type UploadFile } from "@/hooks/use-uploads";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -50,45 +51,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-
-// Types
-type FileStatus = "new" | "in_progress" | "done" | "archived";
-
-// API response type (matches backend naming)
-interface ApiFile {
-  id: string;
-  filename: string;
-  fileUrl: string;
-  size: number;
-  sizeFormatted: string;
-  type: string;
-  status: FileStatus;
-  createdAt: string;
-  updatedAt: string;
-  portalId: string;
-  portalLabel: string;
-  submissionId: string;
-  submitterName: string;
-  submitterEmail: string;
-}
-
-// Internal UI type
-interface UploadFile {
-  id: string;
-  filename: string;
-  fileUrl: string;
-  fileSize: number;
-  linkId: string;
-  linkLabel: string;
-  submissionId: string;
-  status: FileStatus;
-  createdAt: string;
-}
-
-interface PortalLink {
-  id: string;
-  label: string;
-}
 
 // Helper functions
 function getFileIcon(filename: string) {
@@ -207,9 +169,6 @@ const timeRangeOptions = [
 
 export default function UploadsPage() {
   // State
-  const [files, setFiles] = useState<UploadFile[]>([]);
-  const [portals, setPortals] = useState<PortalLink[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"current" | "archive">("current");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPortal, setSelectedPortal] = useState<string>("all");
@@ -219,97 +178,26 @@ export default function UploadsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [filesToDelete, setFilesToDelete] = useState<string[]>([]);
 
-  // Load uploads
-  const loadUploads = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const params = new URLSearchParams({
-        tab: activeTab,
-        ...(searchQuery && { search: searchQuery }),
-        ...(selectedPortal !== "all" && { portalId: selectedPortal }),
-        ...(selectedTimeRange !== "all" && { timeRange: selectedTimeRange }),
-      });
-
-      const res = await fetch(`/api/uploads?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        // Map API response to internal type
-        const mappedFiles: UploadFile[] = (data.files || []).map((f: ApiFile) => ({
-          id: f.id,
-          filename: f.filename,
-          fileUrl: f.fileUrl,
-          fileSize: f.size,
-          linkId: f.portalId,
-          linkLabel: f.portalLabel,
-          submissionId: f.submissionId,
-          status: f.status,
-          createdAt: f.createdAt,
-        }));
-        setFiles(mappedFiles);
-        if (data.portals) {
-          setPortals(data.portals);
-        }
-      } else {
-        toast.error("Fehler beim Laden der Uploads");
-      }
-    } catch {
-      toast.error("Verbindungsfehler beim Laden der Uploads");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeTab, searchQuery, selectedPortal, selectedTimeRange]);
-
-  useEffect(() => {
-    loadUploads();
-  }, [loadUploads]);
+  // SWR hook for uploads
+  const { files, portals, isLoading, updateFileStatus, deleteFiles } = useUploads({
+    tab: activeTab,
+    search: searchQuery || undefined,
+    portalId: selectedPortal,
+    timeRange: selectedTimeRange,
+  });
 
   // Clear selection when tab changes
   useEffect(() => {
     setSelectedFiles(new Set());
   }, [activeTab]);
 
-  // Filtered files based on current tab
-  const filteredFiles = useMemo(() => {
-    return files;
-  }, [files]);
-
   // Handle status change
   const handleStatusChange = async (fileIds: string[], newStatus: FileStatus) => {
-    // Optimistic update
-    setFiles((prev) =>
-      prev.map((f) =>
-        fileIds.includes(f.id) ? { ...f, status: newStatus } : f
-      )
-    );
-
-    try {
-      const res = await fetch("/api/uploads/status", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileIds, status: newStatus }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Status update failed");
-      }
-
-      toast.success(
-        `Status auf "${statusConfig[newStatus].label}" geaendert`
-      );
-
-      // If status changed to archived and we're on current tab, remove from list
-      if (newStatus === "archived" && activeTab === "current") {
-        setFiles((prev) => prev.filter((f) => !fileIds.includes(f.id)));
-      }
-      // If status changed from archived and we're on archive tab, remove from list
-      if (newStatus !== "archived" && activeTab === "archive") {
-        setFiles((prev) => prev.filter((f) => !fileIds.includes(f.id)));
-      }
-
+    const success = await updateFileStatus(fileIds, newStatus);
+    if (success) {
+      toast.success(`Status auf "${statusConfig[newStatus].label}" geaendert`);
       setSelectedFiles(new Set());
-    } catch {
-      // Rollback on error
-      loadUploads();
+    } else {
       toast.error("Fehler beim Aendern des Status");
     }
   };
@@ -346,37 +234,28 @@ export default function UploadsPage() {
     if (filesToDelete.length === 0) return;
 
     setIsDeleting(true);
-    try {
-      const res = await fetch("/api/uploads", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileIds: filesToDelete }),
-      });
+    const success = await deleteFiles(filesToDelete);
 
-      if (res.ok) {
-        setFiles((prev) => prev.filter((f) => !filesToDelete.includes(f.id)));
-        setSelectedFiles(new Set());
-        toast.success(
-          `${filesToDelete.length} Datei${filesToDelete.length > 1 ? "en" : ""} geloescht`
-        );
-      } else {
-        toast.error("Fehler beim Loeschen");
-      }
-    } catch {
-      toast.error("Verbindungsfehler beim Loeschen");
-    } finally {
-      setIsDeleting(false);
-      setDeleteDialogOpen(false);
-      setFilesToDelete([]);
+    if (success) {
+      setSelectedFiles(new Set());
+      toast.success(
+        `${filesToDelete.length} Datei${filesToDelete.length > 1 ? "en" : ""} geloescht`
+      );
+    } else {
+      toast.error("Fehler beim Loeschen");
     }
+
+    setIsDeleting(false);
+    setDeleteDialogOpen(false);
+    setFilesToDelete([]);
   };
 
   // Selection handlers
   const toggleSelectAll = () => {
-    if (selectedFiles.size === filteredFiles.length) {
+    if (selectedFiles.size === files.length) {
       setSelectedFiles(new Set());
     } else {
-      setSelectedFiles(new Set(filteredFiles.map((f) => f.id)));
+      setSelectedFiles(new Set(files.map((f) => f.id)));
     }
   };
 
@@ -393,7 +272,7 @@ export default function UploadsPage() {
   };
 
   const isAllSelected =
-    filteredFiles.length > 0 && selectedFiles.size === filteredFiles.length;
+    files.length > 0 && selectedFiles.size === files.length;
   const hasSelection = selectedFiles.size > 0;
 
   return (
@@ -519,11 +398,11 @@ export default function UploadsPage() {
 
       {/* Table */}
       <div className="rounded-lg border bg-card">
-        {isLoading ? (
+        {isLoading && files.length === 0 ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
-        ) : filteredFiles.length === 0 ? (
+        ) : files.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Upload className="h-10 w-10 mb-3" />
             <p className="text-sm">
@@ -555,7 +434,7 @@ export default function UploadsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredFiles.map((file) => (
+                {files.map((file) => (
                   <TableRow key={file.id}>
                     <TableCell>
                       <Checkbox

@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { Loader2, LogOut } from "lucide-react";
+import { SWRConfig } from "swr";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase";
+import { swrConfig } from "@/lib/swr-config";
 
 export default function DashboardLayout({
   children,
@@ -82,7 +84,7 @@ export default function DashboardLayout({
           </div>
         </header>
         <main className="flex-1">
-          {children}
+          <SWRConfig value={swrConfig}>{children}</SWRConfig>
         </main>
       </SidebarInset>
     </SidebarProvider>

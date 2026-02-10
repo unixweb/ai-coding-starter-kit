@@ -1,50 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
+import {
+  usePortalDetail,
+  type LinkInfo,
+  type Submission,
+  type OutgoingFile,
+} from "@/hooks/use-portal-detail";
 import { Badge } from "@/components/ui/badge";
 import { PortalSettings } from "./portal-settings";
 import { PortalFileList, type FlatFile } from "./portal-file-list";
 import { PortalLinkCard } from "./portal-link-card";
 import { PortalStatsCard } from "./portal-stats-card";
-import {
-  PortalOutgoingFiles,
-  type OutgoingFile,
-} from "./portal-outgoing-files";
-
-interface SubmissionFile {
-  name: string;
-  size: number;
-  type: string;
-  sizeFormatted: string;
-}
-
-interface Submission {
-  id: string;
-  name: string;
-  email: string;
-  note: string;
-  file_count: number;
-  created_at: string;
-  files: SubmissionFile[];
-}
-
-interface LinkInfo {
-  id: string;
-  token: string;
-  label: string;
-  description: string;
-  is_active: boolean;
-  is_locked: boolean;
-  failed_attempts: number;
-  has_password: boolean;
-  expires_at: string | null;
-  created_at: string;
-  client_email: string | null;
-}
+import { PortalOutgoingFiles } from "./portal-outgoing-files";
 
 function getStatusBadge(link: LinkInfo) {
   if (link.is_locked) return <Badge variant="destructive">Gesperrt</Badge>;
@@ -84,46 +55,12 @@ export default function PortalDetailPage() {
   const linkId = params.linkId as string;
   const { isOwner } = useUserRole();
 
-  const [link, setLink] = useState<LinkInfo | null>(null);
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [outgoingFiles, setOutgoingFiles] = useState<OutgoingFile[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadData = useCallback(async () => {
-    try {
-      const [submissionsRes, outgoingRes] = await Promise.all([
-        fetch(`/api/portal/submissions?linkId=${encodeURIComponent(linkId)}`),
-        fetch(`/api/portal/outgoing?linkId=${encodeURIComponent(linkId)}`),
-      ]);
-
-      if (submissionsRes.ok) {
-        const data = await submissionsRes.json();
-        setLink(data.link);
-        setSubmissions(data.submissions);
-        setError(null);
-      } else {
-        setError("Daten konnten nicht geladen werden");
-      }
-
-      if (outgoingRes.ok) {
-        const outgoingData = await outgoingRes.json();
-        setOutgoingFiles(outgoingData.files || []);
-      }
-    } catch {
-      setError("Verbindungsfehler");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [linkId]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const { link, submissions, outgoingFiles, isLoading, isError, refresh } =
+    usePortalDetail(linkId);
 
   const flatFiles = flattenFiles(submissions);
 
-  if (isLoading) {
+  if (isLoading && !link) {
     return (
       <div className="flex items-center justify-center py-16">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -131,7 +68,7 @@ export default function PortalDetailPage() {
     );
   }
 
-  if (error || !link) {
+  if (isError || !link) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <Link
@@ -142,7 +79,7 @@ export default function PortalDetailPage() {
           Zurueck zur Uebersicht
         </Link>
         <div className="rounded-md bg-destructive/10 p-4 text-sm text-destructive">
-          {error || "Portal nicht gefunden"}
+          Portal nicht gefunden
         </div>
       </div>
     );
@@ -179,19 +116,19 @@ export default function PortalDetailPage() {
             hasPassword={link.has_password}
             clientEmail={link.client_email}
             isOwner={isOwner ?? false}
-            onSaved={loadData}
+            onSaved={refresh}
           />
 
           <PortalOutgoingFiles
             files={outgoingFiles}
             linkId={link.id}
-            onFilesChanged={loadData}
+            onFilesChanged={refresh}
           />
 
           <PortalFileList
             files={flatFiles}
             linkId={link.id}
-            onFilesChanged={loadData}
+            onFilesChanged={refresh}
           />
         </div>
 
@@ -202,7 +139,7 @@ export default function PortalDetailPage() {
             isActive={link.is_active}
             linkId={link.id}
             clientEmail={link.client_email}
-            onFilesUploaded={loadData}
+            onFilesUploaded={refresh}
           />
 
           <PortalStatsCard
