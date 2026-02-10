@@ -22,9 +22,11 @@ export const fetcher = async (url: string) => {
 
 export const swrConfig: SWRConfiguration = {
   fetcher,
-  revalidateOnFocus: true,
-  revalidateOnReconnect: true,
-  dedupingInterval: 2000,
+  revalidateOnFocus: false,       // Nicht bei jedem Tab-Wechsel neu laden
+  revalidateOnReconnect: true,    // Bei Reconnect schon
+  dedupingInterval: 5000,         // 5 Sekunden Deduplizierung
   errorRetryCount: 3,
   errorRetryInterval: 5000,
+  revalidateIfStale: true,        // Im Hintergrund aktualisieren wenn veraltet
+  keepPreviousData: true,         // Alte Daten behalten während neu geladen wird
 };
