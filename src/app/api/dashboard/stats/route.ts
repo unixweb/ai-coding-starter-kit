@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase-server";
 import { NextResponse } from "next/server";
-import { list } from "@vercel/blob";
-import { getFileTypeLabel, formatFileSize } from "@/lib/files";
+import { formatFileSize } from "@/lib/files";
 
 export async function GET() {
   const supabase = await createClient();
@@ -12,65 +11,6 @@ export async function GET() {
   if (!user || !user.email_confirmed_at) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
-
-  // Fetch files from Vercel Blob
-  const prefix = `user/${user.id}/`;
-  const allFiles: {
-    name: string;
-    size: number;
-    type: string;
-    uploadedAt: string;
-  }[] = [];
-
-  try {
-    let cursor: string | undefined;
-    do {
-      const result = await list({ prefix, cursor });
-      for (const blob of result.blobs) {
-        const name = blob.pathname.replace(prefix, "");
-        allFiles.push({
-          name,
-          size: blob.size,
-          type: getFileTypeLabel(name),
-          uploadedAt: blob.uploadedAt.toISOString(),
-        });
-      }
-      cursor = result.hasMore ? result.cursor : undefined;
-    } while (cursor);
-  } catch {
-    // If blob listing fails, continue with empty files
-  }
-
-  // Sort by date descending
-  allFiles.sort(
-    (a, b) =>
-      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
-  );
-
-  // Calculate uploads today
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const uploadsToday = allFiles.filter(
-    (f) => new Date(f.uploadedAt) >= todayStart,
-  ).length;
-
-  // Calculate uploads this week
-  const weekStart = new Date();
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-  weekStart.setHours(0, 0, 0, 0);
-  const uploadsThisWeek = allFiles.filter(
-    (f) => new Date(f.uploadedAt) >= weekStart,
-  ).length;
-
-  // Last activity
-  const lastActivity = allFiles.length > 0 ? allFiles[0].uploadedAt : null;
-
-  // Recent files (top 5)
-  const recentFiles = allFiles.slice(0, 5).map((f) => ({
-    name: f.name,
-    size: formatFileSize(f.size),
-    uploadedAt: f.uploadedAt,
-  }));
 
   // Check if user is a team member to determine the owner
   const { data: membership } = await supabase
@@ -84,16 +24,60 @@ export async function GET() {
   // Fetch portal links with submission counts (for user or their owner)
   const { data: links } = await supabase
     .from("portal_links")
-    .select("*, portal_submissions(count)")
+    .select("id, label, is_active, is_locked, expires_at, portal_submissions(count)")
     .eq("user_id", ownerId)
     .order("created_at", { ascending: false });
 
   const portalLinks = links || [];
+  const linkIds = portalLinks.map((l) => l.id);
+
+  // Fetch recent files from portal_file_status
+  let recentFiles: { name: string; size: string; uploadedAt: string }[] = [];
+  let totalUploads = 0;
+  let uploadsToday = 0;
+  let uploadsThisWeek = 0;
+  let lastActivity: string | null = null;
+
+  if (linkIds.length > 0) {
+    // Get file statuses with submission info
+    const { data: fileStatuses } = await supabase
+      .from("portal_file_status")
+      .select("id, filename, file_size, created_at, submission_id")
+      .in("link_id", linkIds)
+      .order("created_at", { ascending: false });
+
+    if (fileStatuses && fileStatuses.length > 0) {
+      totalUploads = fileStatuses.length;
+      lastActivity = fileStatuses[0].created_at;
+
+      // Calculate time-based stats
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      weekStart.setHours(0, 0, 0, 0);
+
+      for (const f of fileStatuses) {
+        const createdAt = new Date(f.created_at);
+        if (createdAt >= todayStart) uploadsToday++;
+        if (createdAt >= weekStart) uploadsThisWeek++;
+      }
+
+      // Recent files (top 5)
+      recentFiles = fileStatuses.slice(0, 5).map((f) => ({
+        name: f.filename,
+        size: formatFileSize(f.file_size),
+        uploadedAt: f.created_at,
+      }));
+    }
+  }
+
   const activePortals = portalLinks.filter(
     (l) =>
       l.is_active &&
       !l.is_locked &&
-      (!l.expires_at || new Date(l.expires_at) >= new Date()),
+      (!l.expires_at || new Date(l.expires_at) >= new Date())
   ).length;
 
   const inactivePortals = portalLinks.length - activePortals;
@@ -101,7 +85,7 @@ export async function GET() {
   // Total submissions across all portals
   const totalSubmissions = portalLinks.reduce(
     (sum, l) => sum + (l.portal_submissions?.[0]?.count ?? 0),
-    0,
+    0
   );
 
   // Active portal links for display (top 3 active)
@@ -110,7 +94,7 @@ export async function GET() {
       (l) =>
         l.is_active &&
         !l.is_locked &&
-        (!l.expires_at || new Date(l.expires_at) >= new Date()),
+        (!l.expires_at || new Date(l.expires_at) >= new Date())
     )
     .slice(0, 3)
     .map((l) => ({
@@ -126,7 +110,7 @@ export async function GET() {
     uploadsThisWeek,
     activePortals,
     inactivePortals,
-    totalUploads: allFiles.length,
+    totalUploads,
     totalSubmissions,
     lastActivity,
     recentFiles,
