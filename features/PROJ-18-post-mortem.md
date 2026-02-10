@@ -140,6 +140,36 @@ UPDATE profiles SET is_owner = false WHERE email = 'info@joachimhummel.de';
 
 ---
 
+### 6. Falscher Blob-Pfad fuer Dashboard-Uploads
+
+**Problem:** Dashboard-Stats suchten Dateien im falschen Vercel Blob Pfad.
+
+**Betroffene Stelle:**
+- `/api/dashboard/stats` - Suchte in `user/${user.id}/` statt Portal-Uploads
+
+**Symptom:** Dashboard zeigte "0 Uploads" obwohl Mandanten Dateien hochgeladen hatten.
+
+**Ursache:**
+- Eigene User-Dateien: `user/${user.id}/`
+- Mandanten-Uploads: `portal/${linkId}/${submissionId}/`
+
+**Loesung:** Uploads aus `portal_file_status` Tabelle laden statt Vercel Blob Listing:
+```typescript
+// Statt:
+const result = await list({ prefix: `user/${user.id}/` });
+
+// Besser:
+const { data: fileStatuses } = await supabase
+  .from("portal_file_status")
+  .select("id, filename, file_size, created_at")
+  .in("link_id", linkIds)
+  .order("created_at", { ascending: false });
+```
+
+**Bonus:** Schneller, weil DB-Query statt externer Blob-API.
+
+---
+
 ## Checkliste fuer zukuenftige Team-Features
 
 ### Neue API erstellen
