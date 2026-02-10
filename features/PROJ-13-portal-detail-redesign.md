@@ -1,6 +1,6 @@
 # PROJ-13: Portal-Detail-Seite Redesign
 
-## Status: Planned
+## Status: Deployed
 
 ## Beschreibung
 Die Portal-Detail-Seite (`/dashboard/portal/[linkId]`) wird nach dem Vorbild von demo.safedocsportal.de komplett umgestaltet. Das aktuelle Design zeigt eine einfache Link-Info-Card und darunter eine Einreichungs-Liste (gruppiert nach Einreicher). Das neue Design hat ein zweispaltiges Layout: Links ein Hauptbereich mit Portal-Einstellungen und einer flachen Datei-Liste, rechts eine Sidebar mit Portal-Link, Aktions-Buttons und Statistiken. Die Seite wird dadurch deutlich uebersichtlicher und funktionaler.

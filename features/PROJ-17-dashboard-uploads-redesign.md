@@ -1,6 +1,6 @@
 # PROJ-17: Dashboard Uploads Redesign
 
-## Status: Planned
+## Status: Deployed
 
 ## Beschreibung
 

@@ -1,6 +1,6 @@
 # PROJ-18: Team-Benutzer-Verwaltung
 
-## Status: Planned
+## Status: Deployed
 
 ## Beschreibung
 Portal-Owner (Hauptbenutzer) koennen zusaetzliche Team-Mitglieder per E-Mail einladen. Eingeladene Benutzer erhalten eine E-Mail mit Registrierungslink, fuellen Name/Passwort aus und haben dann eingeschraenkten Zugriff auf das Portal. Team-Mitglieder koennen Portale verwalten und Uploads einsehen, aber KEINE Portale erstellen oder loeschen.
