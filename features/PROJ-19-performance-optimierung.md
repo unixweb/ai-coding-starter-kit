@@ -1,6 +1,6 @@
 # PROJ-19: Performance-Optimierung mit Client-Side Caching
 
-## Status: Planned
+## Status: Deployed
 
 ## Beschreibung
 
